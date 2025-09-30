@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Solicitudes de Fondos</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Pantalla de Login -->
+    <div id="loginScreen" class="login-container">
+        <div class="login-form">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #d01f34 0%, #606060 100%); border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: white; font-size: 36px; font-weight: bold;">SF</span>
+                </div>
+                <h2 style="color: #333; margin: 0;">Sistema de Solicitudes de Fondos</h2>
+            </div>
+            <form onsubmit="iniciarSesion(event)">
+                <div class="form-group">
+                    <label for="loginUsername">Usuario:</label>
+                    <input type="text" id="loginUsername" required placeholder="Ingrese su usuario" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Contraseña:</label>
+                    <input type="password" id="loginPassword" required placeholder="Ingrese su contraseña" autocomplete="current-password">
+                </div>
+                <div id="loginError" class="alert error" style="display: none; margin-bottom: 15px;"></div>
+                <button type="submit" class="btn" style="width: 100%;">Iniciar Sesión</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Aplicación Principal -->
+    <div id="mainApp" style="display: none;">
+        <div class="container">
+            <div class="header">
+                <div>
+                    <h1>Sistema de Solicitudes de Fondos</h1>
+                    <p>Bienvenido, <span id="userInfo"></span> (<span id="userRole"></span>)</p>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-secondary" onclick="mostrarCambioContrasena()" id="btnCambiarPassword">Cambiar Contraseña</button>
+                    <button class="btn btn-danger" onclick="cerrarSesion()">Cerrar Sesión</button>
+                </div>
+            </div>
+
+            <div class="main-content">
+                <div class="nav-tabs">
+                    <div class="nav-tab" onclick="switchTab('solicitudes')">Solicitudes</div>
+                    <div class="nav-tab active" onclick="switchTab('nueva')">Nueva Solicitud</div>
+                    <div class="nav-tab" onclick="switchTab('seguimiento')">Seguimiento</div>
+                    <div class="nav-tab" onclick="switchTab('usuarios')">Usuarios</div>
+                    <div class="nav-tab" onclick="switchTab('proveedores')">Proveedores</div>
+                    <div class="nav-tab" onclick="switchTab('empresas')">Empresas</div>
+                </div>
+
+                <!-- [MANTENER TODOS LOS TABS EXISTENTES SIN CAMBIOS] -->
+                <!-- Tab: Lista de Solicitudes -->
+                <div id="solicitudesTab" class="tab-content">
+                    <h3>Lista de Solicitudes</h3>
+                    <div class="table-container">
+                        <table id="solicitudesTable">
+                            <thead>
+                                <tr>
+                                    <th>Número</th>
+                                    <th>Sucursal</th>
+                                    <th>Empresa</th>
+                                    <th>Proveedor</th>
+                                    <th>Concepto</th>
+                                    <th>Monto Total</th>
+                                    <th>Estado</th>
+                                    <th>Fecha</th>
+                                    <th class="acciones-column">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab: Nueva Solicitud -->
+                <div id="nuevaTab" class="tab-content active">
+                    <h3>Nueva Solicitud de Fondos</h3>
+                    <form id="solicitudForm" onsubmit="crearSolicitud(event)">
+                        <!-- Reemplaza estas secciones en el formulario de Nueva Solicitud -->
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="empresa">Empresa (Razón Social):</label>
+                                <select id="empresa" required>
+                                    <option value="">Seleccione empresa</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="sucursal">Sucursal:</label>
+                                <select id="sucursal" required>
+                                    <option value="">Seleccione sucursal</option>
+                                    <option value="AGS">Aguascalientes</option>
+                                    <option value="LEO">León</option>
+                                    <option value="CAN">Cancún</option>
+                                    <option value="MTY">Monterrey</option>
+                                    <option value="GDL">Guadalajara</option>
+                                    <option value="VSA">Villahermosa</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="numeroConsecutivo">Número de solicitud:</label>
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                    <input type="checkbox" id="numeroAutomatico" onchange="toggleNumeroConsecutivo()" checked>
+                                    <label for="numeroAutomatico" style="margin: 0; font-weight: normal;">Numeración automática</label>
+                                </div>
+                                <input type="number" id="numeroConsecutivo" min="1" required placeholder="Se generará automáticamente" disabled style="background: #f8f9fa;">
+                                <small style="color: #666;">Formato: SUC-###-YYYY</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="solicitudVinculada">Vincular con:</label>
+                                <select id="solicitudVinculada" multiple size="5" onchange="cargarConceptoVinculado()" style="margin-top: 34px;">
+                                    <option value="" selected>Sin vincular</option>
+                                </select>
+                                <small style="color: #666;">Ctrl/Cmd + Click para múltiples</small>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="beneficiario">Beneficiario:</label>
+                                <select id="beneficiario" required onchange="cargarDatosBeneficiario()">
+                                    <option value="">Seleccione beneficiario</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="proveedor">Nombre del Proveedor:</label>
+                                <input type="text" id="proveedor" required readonly style="background: #f8f9fa;">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="conceptoGeneral">Concepto General:</label>
+                            <textarea id="conceptoGeneral" rows="3" required placeholder="Descripción general del trabajo o servicio"></textarea>
+                            <small style="color: #666;">Se llenará automáticamente al vincular solicitudes</small>
+                        </div>
+
+                        <!-- Reemplaza estas secciones en el formulario -->
+
+                        <div class="form-group">
+                            <label for="montoConceptoGeneral">Monto Total del Concepto General (MXN):</label>
+                            <input type="text" id="montoConceptoGeneral" required oninput="formatearMoneda(this)" onblur="formatearMonedaCompleto(this); calcularTotal();" placeholder="$0.00">
+                            <small style="color: #666;">Monto total del proyecto o servicio completo</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="conceptoPago">Concepto de Pago (si es parcial):</label>
+                            <textarea id="conceptoPago" rows="2" placeholder="Ej: Anticipo del 50%, Finiquito, etc."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="claveAnuncio">Clave de Anuncio (opcional):</label>
+                            <input type="text" id="claveAnuncio" placeholder="Ej: TAB007, AGS001, etc.">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="subtotal">Monto del Concepto de Pago (MXN):</label>
+                                <input type="text" id="subtotal" required oninput="formatearMoneda(this)" onblur="formatearMonedaCompleto(this); calcularTotal();" placeholder="$0.00">
+                                <small style="color: #666;">Monto de este pago específico</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="descuento">Descuento (MXN):</label>
+                                <input type="text" id="descuento" value="$0.00" oninput="formatearMoneda(this)" onblur="formatearMonedaCompleto(this); calcularTotal();" placeholder="$0.00">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="impuestos">Impuestos (%):</label>
+                                <input type="number" id="impuestos" step="0.01" min="0" max="100" value="16" required oninput="calcularTotal();" placeholder="16.00">
+                                <small style="color: #666;">Ingrese el porcentaje de impuestos (ej: 16 para IVA 16%)</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="montoImpuestos">Monto de Impuestos (MXN):</label>
+                                <input type="text" id="montoImpuestos" readonly style="background: #f8f9fa;" placeholder="$0.00">
+                            </div>
+                            <div class="form-group">
+                                <label for="total">Total a Pagar (MXN):</label>
+                                <input type="text" id="total" readonly style="background: #f8f9fa; font-weight: bold;" placeholder="$0.00">
+                            </div>
+                        </div>
+
+                        <h4 style="margin-top: 30px;">Datos Bancarios del Beneficiario</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="banco">Banco:</label>
+                                <input type="text" id="banco" required readonly style="background: #f8f9fa;">
+                            </div>
+                            <div class="form-group">
+                                <label for="cuenta">Cuenta:</label>
+                                <input type="text" id="cuenta" required readonly style="background: #f8f9fa;">
+                            </div>
+                            <div class="form-group">
+                                <label for="clabe">CLABE:</label>
+                                <input type="text" id="clabe" maxlength="18" required readonly style="background: #f8f9fa;">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="ciudad">Ciudad y Estado:</label>
+                            <input type="text" id="ciudad" required>
+                        </div>
+
+                        <button type="submit" class="btn">Crear Solicitud</button>
+                        <button type="button" class="btn btn-secondary" onclick="limpiarFormulario()">Limpiar</button>
+                    </form>
+                </div>
+
+                <!-- Tab: Seguimiento -->
+                <div id="seguimientoTab" class="tab-content">
+                    <h3>Seguimiento de Pagos por Concepto</h3>
+                    <div class="form-group">
+                        <label for="buscarConcepto">Buscar por concepto:</label>
+                        <input type="text" id="buscarConcepto" placeholder="Ingrese parte del concepto general">
+                        <button class="btn" onclick="buscarPorConcepto()">Buscar</button>
+                    </div>
+                    <div id="seguimientoResultados"></div>
+                </div>
+
+                <!-- Tab: Gestión de Usuarios -->
+                <div id="usuariosTab" class="tab-content">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>Gestión de Usuarios</h3>
+                        <button class="btn" onclick="mostrarFormularioUsuario()">Nuevo Usuario</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="usuariosTable">
+                            <thead>
+                                <tr>
+                                    <th>Usuario</th>
+                                    <th>Nombre</th>
+                                    <th>Rol</th>
+                                    <th>Sucursal</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab: Gestión de Beneficiarios -->
+                <div id="proveedoresTab" class="tab-content">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>Gestión de Proveedores</h3>
+                        <button class="btn" onclick="mostrarFormularioProveedor()">Nuevo Proveedor</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="proveedoresTable">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>RFC</th>
+                                    <th>Banco</th>
+                                    <th>Cuenta</th>
+                                    <th>CLABE</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab: Gestión de Empresas -->
+                <div id="empresasTab" class="tab-content">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>Gestión de Empresas (Razones Sociales)</h3>
+                        <button class="btn" onclick="mostrarFormularioEmpresa()">Nueva Empresa</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="empresasTable">
+                            <thead>
+                                <tr>
+                                    <th>Razón Social</th>
+                                    <th>RFC</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- [MANTENER TODOS LOS MODALES EXISTENTES] -->
+    <!-- Modal para Ver/Editar Solicitud -->
+    <div id="detalleModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="cerrarModal()">&times;</span>
+            <h3 id="modalTitle">Detalle de Solicitud</h3>
+            <div id="modalContent"></div>
+            <div id="modalActions" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <!-- Modal para Gestión de Usuarios -->
+    <div id="usuarioModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="cerrarModalUsuario()">&times;</span>
+            <h3 id="usuarioModalTitle">Nuevo Usuario</h3>
+            <form id="usuarioForm" onsubmit="guardarUsuario(event)">
+                <div class="form-group">
+                    <label for="usuarioUsername">Usuario:</label>
+                    <input type="text" id="usuarioUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="usuarioNombre">Nombre Completo:</label>
+                    <input type="text" id="usuarioNombre" required>
+                </div>
+                <div class="form-group">
+                    <label for="usuarioPassword">Contraseña:</label>
+                    <input type="password" id="usuarioPassword" required>
+                </div>
+                <div class="form-group">
+                    <label for="usuarioRol">Rol:</label>
+                    <select id="usuarioRol" required onchange="toggleSucursalField()">
+                        <option value="">Seleccione rol</option>
+                        <option value="jefe">Jefe de Sucursal</option>
+                        <option value="coordinador">Coordinador</option>
+                        <option value="admin">Administrador</option>
+                    </select>
+                </div>
+                <div class="form-group" id="usuarioSucursalGroup">
+                    <label for="usuarioSucursal">Sucursal:</label>
+                    <select id="usuarioSucursal">
+                        <option value="">Seleccione sucursal</option>
+                        <option value="AGS">Aguascalientes</option>
+                        <option value="LEO">León</option>
+                        <option value="CAN">Cancún</option>
+                        <option value="MTY">Monterrey</option>
+                        <option value="GDL">Guadalajara</option>
+                        <option value="VSA">Villahermosa</option>
+                    </select>
+                </div>
+                <div style="margin-top: 20px;">
+                    <button type="submit" class="btn">Guardar Usuario</button>
+                    <button type="button" class="btn btn-secondary" onclick="cerrarModalUsuario()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para Gestión de Beneficiarios -->
+    <div id="proveedorModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="cerrarModalProveedor()">&times;</span>
+            <h3 id="proveedorModalTitle">Nuevo Proveedor</h3>
+            <form id="proveedorForm" onsubmit="guardarProveedor(event)">
+                <div class="form-group">
+                    <label for="proveedorNombre">Nombre del Proveedor:</label>
+                    <input type="text" id="proveedorNombre" required>
+                </div>
+                <div class="form-group">
+                    <label for="proveedorRFC">RFC:</label>
+                    <input type="text" id="proveedorRFC" maxlength="13" required>
+                </div>
+                <div class="form-group">
+                    <label for="proveedorBanco">Banco:</label>
+                    <input type="text" id="proveedorBanco" required>
+                </div>
+                <div class="form-group">
+                    <label for="proveedorCuenta">Cuenta:</label>
+                    <input type="text" id="proveedorCuenta" required>
+                </div>
+                <div class="form-group">
+                    <label for="proveedorClabe">CLABE:</label>
+                    <input type="text" id="proveedorClabe" maxlength="18" required>
+                </div>
+                <div style="margin-top: 20px;">
+                    <button type="submit" class="btn">Guardar Proveedor</button>
+                    <button type="button" class="btn btn-secondary" onclick="cerrarModalProveedor()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="csfModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="cerrarModalCSF()">&times;</span>
+            <h3 id="csfModalTitle">Constancia de Situación Fiscal</h3>
+            <div id="csfProveedorInfo"></div>
+            <div class="form-group">
+                <label for="archivoCSF">Subir Constancia de Situación Fiscal (PDF):</label>
+                <input type="file" id="archivoCSF" accept=".pdf">
+                <button class="btn" onclick="subirCSF()" style="margin-top: 10px;">Subir CSF</button>
+            </div>
+            <div id="csfActual" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <!-- Modal para Gestión de Empresas -->
+    <div id="empresaModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="cerrarModalEmpresa()">&times;</span>
+            <h3 id="empresaModalTitle">Nueva Empresa</h3>
+            <form id="empresaForm" onsubmit="guardarEmpresa(event)">
+                <div class="form-group">
+                    <label for="empresaRazon">Razón Social:</label>
+                    <input type="text" id="empresaRazon" required>
+                </div>
+                <div class="form-group">
+                    <label for="empresaRFC">RFC:</label>
+                    <input type="text" id="empresaRFC" maxlength="13" required>
+                </div>
+                <div style="margin-top: 20px;">
+                    <button type="submit" class="btn">Guardar Empresa</button>
+                    <button type="button" class="btn btn-secondary" onclick="cerrarModalEmpresa()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para Gestión de Archivos -->
+    <div id="archivosModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="cerrarModalArchivos()">&times;</span>
+            <h3 id="archivosModalTitle">Gestionar Archivos de Facturación</h3>
+            <div id="archivosSolicitudInfo"></div>
+            <div class="form-group">
+                <label for="archivosFactura">Subir Archivos PDF/XML:</label>
+                <input type="file" id="archivosFactura" accept=".pdf,.xml" multiple>
+                <button class="btn" onclick="subirArchivos()" style="margin-top: 10px;">Subir Archivos</button>
+            </div>
+            <div id="listaArchivos" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <!-- Modal para Cambio de Contraseña -->
+    <div id="cambioPasswordModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="cerrarModalCambioPassword()">&times;</span>
+            <h3>Cambiar Contraseña</h3>
+            <form id="cambioPasswordForm" onsubmit="cambiarContrasena(event)">
+                <div class="form-group">
+                    <label for="passwordActual">Contraseña Actual:</label>
+                    <input type="password" id="passwordActual" required autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                    <label for="passwordNueva">Nueva Contraseña:</label>
+                    <input type="password" id="passwordNueva" required minlength="6" autocomplete="new-password">
+                    <small style="color: #666;">Mínimo 6 caracteres</small>
+                </div>
+                <div class="form-group">
+                    <label for="passwordConfirmar">Confirmar Nueva Contraseña:</label>
+                    <input type="password" id="passwordConfirmar" required minlength="6" autocomplete="new-password">
+                </div>
+                <div id="passwordError" class="alert error" style="display: none;"></div>
+                <div style="margin-top: 20px;">
+                    <button type="submit" class="btn">Cambiar Contraseña</button>
+                    <button type="button" class="btn btn-secondary" onclick="cerrarModalCambioPassword()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
