@@ -7,14 +7,86 @@ let usuarios = {
     'mty_jefe': { password: 'mty2025', rol: 'jefe', sucursal: 'MTY', nombre: 'Jefe Monterrey' },
     'gdl_jefe': { password: 'gdl2025', rol: 'jefe', sucursal: 'GDL', nombre: 'Jefe Guadalajara' },
     'vsa_jefe': { password: 'vsa2025', rol: 'jefe', sucursal: 'VSA', nombre: 'Jefe Villahermosa' },
-    'coordinador': { password: 'coord2025', rol: 'coordinador', sucursal: null, nombre: 'Coordinador de Sucursales' },
-    'smaurer': { password: 'smaurer', rol: 'admin', sucursal: null, nombre: 'Sergio Maurer - Administrador General' }
+    'coordinador': { password: 'coord2025', rol: 'coordinador', sucursal: null, nombre: 'Coordinador Administrativo' },
+    'admin_unico': { password: 'admin2025', rol: 'admin', sucursal: null, nombre: 'Administrador General' }
+};
+
+// Definición de permisos disponibles
+const permisosDisponibles = {
+    'ver_todas_solicitudes': 'Ver todas las solicitudes (todos los departamentos)',
+    'ver_solicitudes_sucursal': 'Ver solo solicitudes de su departamento',
+    'crear_solicitud': 'Crear nuevas solicitudes',
+    'editar_solicitud': 'Editar solicitudes pendientes',
+    'autorizar_solicitud': 'Autorizar solicitudes',
+    'cancelar_solicitud': 'Cancelar solicitudes',
+    'marcar_pagada': 'Marcar solicitudes como pagadas',
+    'gestionar_comprobantes': 'Subir/descargar comprobantes de pago',
+    'gestionar_usuarios': 'Crear, editar y eliminar usuarios',
+    'gestionar_proveedores': 'Crear, editar y eliminar proveedores',
+    'gestionar_empresas': 'Crear, editar y eliminar empresas',
+    'descargar_archivos': 'Descargar archivos adjuntos',
+    'exportar_csv': 'Exportar datos a CSV',
+    'gestionar_roles': 'Gestionar roles y permisos (solo admin)'
+};
+
+// Configuración de roles con sus permisos
+let rolesConfig = {
+    'admin': {
+        nombre: 'Administrador General',
+        permisos: [
+            'ver_todas_solicitudes',
+            'crear_solicitud',
+            'editar_solicitud',
+            'autorizar_solicitud',
+            'cancelar_solicitud',
+            'marcar_pagada',
+            'gestionar_comprobantes',
+            'gestionar_usuarios',
+            'gestionar_proveedores',
+            'gestionar_empresas',
+            'descargar_archivos',
+            'exportar_csv',
+            'gestionar_roles'
+        ],
+        requiereSucursal: false,
+        editable: false
+    },
+    'coordinador': {
+        nombre: 'Coordinador de Departamentos',
+        permisos: [
+            'ver_todas_solicitudes',
+            'crear_solicitud',
+            'editar_solicitud',
+            'autorizar_solicitud',
+            'cancelar_solicitud',
+            'marcar_pagada',
+            'gestionar_comprobantes',
+            'descargar_archivos',
+            'exportar_csv'
+        ],
+        requiereSucursal: false,
+        editable: true
+    },
+    'jefe': {
+        nombre: 'Jefe de Departamento',
+        permisos: [
+            'ver_solicitudes_sucursal',
+            'crear_solicitud',
+            'editar_solicitud',
+            'autorizar_solicitud',
+            'cancelar_solicitud',
+            'marcar_pagada'
+        ],
+        requiereSucursal: true,
+        editable: true
+    }
 };
 
 let beneficiarios = [
     {
         id: 1,
         nombre: 'ESPECTACULARES, S.A. DE C.V.',
+        razonSocial: 'ESPECTACULARES SOCIEDAD ANONIMA DE CAPITAL VARIABLE',
         rfc: 'ESP123456789',
         banco: 'BBVA',
         cuenta: '01-20-32-02-50',
@@ -35,15 +107,32 @@ let empresas = [
 ];
 
 let solicitudes = [];
-let contadores = { AGS: 0, LEO: 0, CAN: 0, MTY: 0, GDL: 0, VSA: 0 };
+let contadores = { 
+    AGS: 0, 
+    LEO: 0, 
+    CAN: 0, 
+    MTY: 0, 
+    GDL: 0, 
+    VSA: 0,
+    CDMX: 0,
+    GCC: 0,
+    GCS: 0,
+    DOP: 0,
+    DIR: 0,
+    CMP: 0
+};
 let editandoUsuario = null;
 let editandoBeneficiario = null;
 let editandoEmpresa = null;
 let solicitudActualArchivos = null;
 let usuarioActual = null;
 
-document.addEventListener('DOMContentLoaded', function() {
+let editandoRol = null;
+
+document.addEventListener('DOMContentLoaded', async function() {
+    await cargarDatosDesdeSupabase();
     verificarSesion();
+    inicializarCamposMoneda();
 });
 
 function verificarSesion() {
@@ -94,16 +183,38 @@ function mostrarAplicacion() {
     document.getElementById('userRole').textContent = obtenerNombreRol(usuarioActual.rol);
     
     configurarInterfazPorRol();
+    ocultarPestañasSegunPermisos();
     cargarBeneficiariosSelect();
     cargarEmpresasSelect();
     cargarSolicitudesVinculadas();
 }
 
+function ocultarPestañasSegunPermisos() {
+    // Ocultar pestañas según permisos
+    const tabs = document.querySelectorAll('.nav-tab');
+    tabs.forEach(tab => {
+        const tabText = tab.textContent.toLowerCase();
+        
+        if (tabText.includes('usuarios') && !tienePermiso('gestionar_usuarios')) {
+            tab.style.display = 'none';
+        }
+        if (tabText.includes('proveedores') && !tienePermiso('gestionar_proveedores')) {
+            tab.style.display = 'none';
+        }
+        if (tabText.includes('empresas') && !tienePermiso('gestionar_empresas')) {
+            tab.style.display = 'none';
+        }
+        if (tabText.includes('roles') && !tienePermiso('gestionar_roles')) {
+            tab.style.display = 'none';
+        }
+    });
+}
+
 function obtenerNombreRol(rol) {
     const roles = {
         'admin': 'Administrador General',
-        'coordinador': 'Coordinador de Sucursales',
-        'jefe': 'Jefe de Sucursal'
+        'coordinador': 'Coordinador de Departamentos',
+        'jefe': 'Jefe de Departamento'
     };
     return roles[rol] || rol;
 }
@@ -216,12 +327,36 @@ function getSucursalName(code) {
         'CAN': 'Cancún',
         'MTY': 'Monterrey',
         'GDL': 'Guadalajara',
-        'VSA': 'Villahermosa'
+        'VSA': 'Villahermosa',
+        'CDMX': 'Ciudad de México',
+        'GCC': 'Gerencia Centro',
+        'GCS': 'Gerencia de Departamentos',
+        'DOP': 'Dirección de Operaciones',
+        'DIR': 'Dirección General',
+        'CMP': 'Compras'
     };
     return nombres[code] || code;
 }
 
 function switchTab(tabName) {
+    // Verificar permisos para ciertas pestañas
+    if (tabName === 'usuarios' && !tienePermiso('gestionar_usuarios')) {
+        alert('No tiene permisos para acceder a esta sección');
+        return;
+    }
+    if (tabName === 'proveedores' && !tienePermiso('gestionar_proveedores')) {
+        alert('No tiene permisos para acceder a esta sección');
+        return;
+    }
+    if (tabName === 'empresas' && !tienePermiso('gestionar_empresas')) {
+        alert('No tiene permisos para acceder a esta sección');
+        return;
+    }
+    if (tabName === 'roles' && !tienePermiso('gestionar_roles')) {
+        alert('No tiene permisos para acceder a esta sección');
+        return;
+    }
+    
     document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
     
@@ -236,6 +371,8 @@ function switchTab(tabName) {
         cargarProveedores();
     } else if (tabName === 'empresas') {
         cargarEmpresas();
+    } else if (tabName === 'roles') {
+        cargarRoles();
     } else if (tabName === 'nueva') {
         cargarBeneficiariosSelect();
         cargarEmpresasSelect();
@@ -302,7 +439,7 @@ function extraerValorMoneda(valorFormateado) {
 }
 
 function inicializarCamposMoneda() {
-    const camposMoneda = ['montoConceptoGeneral', 'subtotal', 'descuento'];
+    const camposMoneda = ['montoConceptoGeneral', 'subtotal'];
     
     camposMoneda.forEach(campoId => {
         const campo = document.getElementById(campoId);
@@ -359,10 +496,22 @@ function cargarEmpresasSelect() {
 
 function cargarSolicitudesVinculadas() {
     const select = document.getElementById('solicitudVinculada');
+    const sucursalSelect = document.getElementById('sucursal');
     if (!select) return;
+    
     select.innerHTML = '<option value="" selected>Sin vincular</option>';
     
-    solicitudes.forEach(solicitud => {
+    const sucursalSeleccionada = sucursalSelect.value;
+    
+    // Filtrar por sucursal, excluir canceladas y ordenar descendente por ID
+    const solicitudesFiltradas = solicitudes
+        .filter(solicitud => 
+            (!sucursalSeleccionada || solicitud.sucursal === sucursalSeleccionada) &&
+            solicitud.estado !== 'cancelada'
+        )
+        .sort((a, b) => b.id - a.id);
+    
+    solicitudesFiltradas.forEach(solicitud => {
         const option = document.createElement('option');
         option.value = solicitud.id;
         option.textContent = `${solicitud.numero} - ${solicitud.conceptoGeneral.substring(0, 50)}...`;
@@ -375,6 +524,10 @@ function cargarConceptoVinculado() {
     const selectedOptions = Array.from(select.selectedOptions).filter(opt => opt.value !== '');
     
     if (selectedOptions.length === 0) {
+        // Si selecciona "Sin vincular", limpiar los campos
+        document.getElementById('conceptoGeneral').value = '';
+        document.getElementById('montoConceptoGeneral').value = '';
+        
         const sinVincular = Array.from(select.options).find(opt => opt.value === '');
         if (sinVincular && !sinVincular.selected) {
             sinVincular.selected = true;
@@ -424,6 +577,7 @@ function toggleNumeroConsecutivo() {
 
 document.addEventListener('DOMContentLoaded', function() {
     verificarSesion();
+    inicializarCamposMoneda();
     
     const sucursalSelect = document.getElementById('sucursal');
     if (sucursalSelect) {
@@ -432,6 +586,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (checkbox && checkbox.checked) {
                 toggleNumeroConsecutivo();
             }
+            // Recargar solicitudes vinculadas al cambiar sucursal
+            cargarSolicitudesVinculadas();
         });
     }
     
@@ -446,7 +602,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function cargarBeneficiariosSelect() {
     const select = document.getElementById('beneficiario');
     if (!select) return;
-    select.innerHTML = '<option value="">Seleccione beneficiario</option>';
+    select.innerHTML = '<option value="">Seleccione proveedor</option>';
     
     beneficiarios.forEach(beneficiario => {
         const option = document.createElement('option');
@@ -468,7 +624,7 @@ function cargarDatosBeneficiario() {
     
     const beneficiario = beneficiarios.find(b => b.id == beneficiarioId);
     if (beneficiario) {
-        document.getElementById('proveedor').value = beneficiario.nombre;
+        document.getElementById('proveedor').value = beneficiario.razonSocial || beneficiario.nombre;
         document.getElementById('banco').value = beneficiario.banco;
         document.getElementById('cuenta').value = beneficiario.cuenta;
         document.getElementById('clabe').value = beneficiario.clabe;
@@ -500,13 +656,16 @@ function generarNumeroConsecutivo(sucursal, numeroIngresado) {
     return `${sucursal}-${numeroFormateado}-${año}`;
 }
 
-function crearSolicitud(event) {
+async function crearSolicitud(event) {
     event.preventDefault();
+    
+    const form = document.getElementById('solicitudForm');
+    const editingId = form.getAttribute('data-editing-id');
+    const isEditing = editingId !== null;
     
     const beneficiarioId = document.getElementById('beneficiario').value;
     const empresaId = document.getElementById('empresa').value;
     const sucursal = document.getElementById('sucursal').value;
-    const numeroAutomatico = document.getElementById('numeroAutomatico').checked;
     
     if (!beneficiarioId) {
         alert('Por favor seleccione un beneficiario');
@@ -518,68 +677,121 @@ function crearSolicitud(event) {
         return;
     }
     
-    let numeroConsecutivo;
-    
-    if (numeroAutomatico) {
-        numeroConsecutivo = contadores[sucursal] + 1;
-    } else {
-        numeroConsecutivo = parseInt(document.getElementById('numeroConsecutivo').value);
-        if (!numeroConsecutivo || numeroConsecutivo < 1) {
-            alert('Por favor ingrese un número consecutivo válido');
-            return;
-        }
-    }
-    
-    const numero = generarNumeroConsecutivo(sucursal, numeroConsecutivo);
-    
-    const solicitudesVinculadasSelect = document.getElementById('solicitudVinculada');
-    const solicitudesVinculadas = Array.from(solicitudesVinculadasSelect.selectedOptions)
-        .map(option => option.value)
-        .filter(val => val !== '');
-    
     const porcentajeImpuestos = parseFloat(document.getElementById('impuestos').value) || 0;
     const montoImpuestos = extraerValorMoneda(document.getElementById('montoImpuestos').value);
     
-    const solicitud = {
-        id: Date.now(),
-        numero: numero,
-        numeroConsecutivo: numeroConsecutivo,
-        sucursal: sucursal,
-        empresaId: parseInt(empresaId),
-        beneficiarioId: parseInt(beneficiarioId),
-        proveedor: document.getElementById('proveedor').value,
-        conceptoGeneral: document.getElementById('conceptoGeneral').value,
-        montoConceptoGeneral: extraerValorMoneda(document.getElementById('montoConceptoGeneral').value),
-        conceptoPago: document.getElementById('conceptoPago').value,
-        claveAnuncio: document.getElementById('claveAnuncio').value || '',
-        subtotal: extraerValorMoneda(document.getElementById('subtotal').value),
-        descuento: extraerValorMoneda(document.getElementById('descuento').value),
-        porcentajeImpuestos: porcentajeImpuestos,
-        impuestos: montoImpuestos,
-        total: extraerValorMoneda(document.getElementById('total').value),
-        banco: document.getElementById('banco').value,
-        cuenta: document.getElementById('cuenta').value,
-        clabe: document.getElementById('clabe').value,
-        ciudad: document.getElementById('ciudad').value,
-        estado: 'pendiente',
-        fechaSolicitud: new Date().toISOString(),
-        fechaAutorizacion: null,
-        solicitudesVinculadas: solicitudesVinculadas,
-        archivos: [],
-        creadoPor: usuarioActual.username
-    };
-    
-    solicitudes.push(solicitud);
-    
-    if (numeroConsecutivo > contadores[sucursal]) {
-        contadores[sucursal] = numeroConsecutivo;
+    if (isEditing) {
+        // Modo edición
+        const solicitud = solicitudes.find(s => s.id == editingId);
+        if (solicitud && solicitud.estado === 'pendiente') {
+            solicitud.empresaId = parseInt(empresaId);
+            solicitud.beneficiarioId = parseInt(beneficiarioId);
+            solicitud.proveedor = document.getElementById('proveedor').value;
+            solicitud.conceptoGeneral = document.getElementById('conceptoGeneral').value;
+            solicitud.montoConceptoGeneral = extraerValorMoneda(document.getElementById('montoConceptoGeneral').value);
+            solicitud.conceptoPago = document.getElementById('conceptoPago').value;
+            solicitud.claveAnuncio = document.getElementById('claveAnuncio').value || '';
+            solicitud.subtotal = extraerValorMoneda(document.getElementById('subtotal').value);
+            solicitud.porcentajeImpuestos = porcentajeImpuestos;
+            solicitud.impuestos = montoImpuestos;
+            solicitud.total = extraerValorMoneda(document.getElementById('total').value);
+            solicitud.banco = document.getElementById('banco').value;
+            solicitud.cuenta = document.getElementById('cuenta').value;
+            solicitud.clabe = document.getElementById('clabe').value;
+            solicitud.ciudad = document.getElementById('ciudad').value;
+            
+            try {
+                await actualizarSolicitudSupabase(solicitud);
+            } catch (error) {
+                console.error('Error al actualizar en Supabase:', error);
+                guardarDatos();
+            }
+            
+            alert('Solicitud actualizada exitosamente: ' + solicitud.numero);
+            
+            form.removeAttribute('data-editing-id');
+            const submitButton = document.querySelector('#solicitudForm button[type="submit"]');
+            submitButton.textContent = 'Crear Solicitud';
+            submitButton.style.background = '';
+            
+            limpiarFormulario();
+            cargarSolicitudes();
+            switchTab('solicitudes');
+        }
+    } else {
+        // Modo creación
+        const numeroAutomatico = document.getElementById('numeroAutomatico').checked;
+        let numeroConsecutivo;
+        
+        if (numeroAutomatico) {
+            numeroConsecutivo = contadores[sucursal] + 1;
+        } else {
+            numeroConsecutivo = parseInt(document.getElementById('numeroConsecutivo').value);
+            if (!numeroConsecutivo || numeroConsecutivo < 1) {
+                alert('Por favor ingrese un número consecutivo válido');
+                return;
+            }
+        }
+        
+        const numero = generarNumeroConsecutivo(sucursal, numeroConsecutivo);
+        
+        const solicitudesVinculadasSelect = document.getElementById('solicitudVinculada');
+        const solicitudesVinculadas = Array.from(solicitudesVinculadasSelect.selectedOptions)
+            .map(option => option.value)
+            .filter(val => val !== '');
+        
+        const solicitud = {
+            id: Date.now(),
+            numero: numero,
+            numeroConsecutivo: numeroConsecutivo,
+            sucursal: sucursal,
+            empresaId: parseInt(empresaId),
+            beneficiarioId: parseInt(beneficiarioId),
+            proveedor: document.getElementById('proveedor').value,
+            conceptoGeneral: document.getElementById('conceptoGeneral').value,
+            montoConceptoGeneral: extraerValorMoneda(document.getElementById('montoConceptoGeneral').value),
+            conceptoPago: document.getElementById('conceptoPago').value,
+            claveAnuncio: document.getElementById('claveAnuncio').value || '',
+            subtotal: extraerValorMoneda(document.getElementById('subtotal').value),
+            descuento: 0,
+            porcentajeImpuestos: porcentajeImpuestos,
+            impuestos: montoImpuestos,
+            total: extraerValorMoneda(document.getElementById('total').value),
+            banco: document.getElementById('banco').value,
+            cuenta: document.getElementById('cuenta').value,
+            clabe: document.getElementById('clabe').value,
+            ciudad: document.getElementById('ciudad').value,
+            estado: 'pendiente',
+            fechaSolicitud: new Date().toISOString(),
+            fechaAutorizacion: null,
+            solicitudesVinculadas: solicitudesVinculadas,
+            archivos: [],
+            creadoPor: usuarioActual.username
+        };
+        
+        try {
+            const solicitudGuardada = await guardarSolicitudSupabase(solicitud);
+            solicitudes.push(solicitudGuardada);
+            contadores[sucursal] = numeroConsecutivo;
+        } catch (error) {
+            console.error('Error en Supabase, guardando localmente:', error);
+            solicitudes.push(solicitud);
+            contadores[sucursal] = numeroConsecutivo;
+            guardarDatos();
+        }
+        
+        alert('Solicitud creada exitosamente con número: ' + numero);
+        
+        // Preguntar si desea crear otra solicitud
+        if (confirm('¿Desea crear otra solicitud de fondos?')) {
+            limpiarFormulario();
+            cargarSolicitudesVinculadas();
+        } else {
+            limpiarFormulario();
+            cargarSolicitudes();
+            switchTab('solicitudes');
+        }
     }
-    
-    guardarDatos();
-    
-    alert('Solicitud creada exitosamente con número: ' + numero);
-    limpiarFormulario();
-    switchTab('solicitudes');
 }
 
 function limpiarFormulario() {
@@ -591,7 +803,7 @@ function limpiarFormulario() {
     document.getElementById('conceptoGeneral').value = '';
     document.getElementById('montoConceptoGeneral').value = '';
     document.getElementById('subtotal').value = '';
-    document.getElementById('descuento').value = '$0.00';
+    document.getElementById('porcentajeAnticipo').value = '100';
     document.getElementById('impuestos').value = '16';
     document.getElementById('montoImpuestos').value = '';
     document.getElementById('total').value = '';
@@ -611,30 +823,232 @@ function cargarSolicitudes() {
     const tbody = document.querySelector('#solicitudesTable tbody');
     tbody.innerHTML = '';
     
-    solicitudes.forEach(solicitud => {
+    // Filtrar solicitudes según permisos
+    let solicitudesFiltradas = solicitudes;
+    
+    if (usuarioActual.rol === 'jefe' && usuarioActual.sucursal) {
+        solicitudesFiltradas = solicitudes.filter(s => s.sucursal === usuarioActual.sucursal);
+    } else if (!tienePermiso('ver_todas_solicitudes')) {
+        if (usuarioActual.sucursal) {
+            solicitudesFiltradas = solicitudes.filter(s => s.sucursal === usuarioActual.sucursal);
+        }
+    }
+    
+    solicitudesFiltradas.forEach(solicitud => {
         const empresa = empresas.find(e => e.id === solicitud.empresaId);
         const row = tbody.insertRow();
         
+        const tieneComprobante = solicitud.comprobantePago ? true : false;
+        const iconoComprobante = tieneComprobante ? '📄' : '';
+        
+        // Botones según permisos
+        const puedeEditar = tienePermiso('editar_solicitud') && solicitud.estado === 'pendiente';
+        const puedeAutorizar = tienePermiso('autorizar_solicitud') && solicitud.estado === 'pendiente';
+        const puedeCancelar = tienePermiso('cancelar_solicitud');
+        
         const botonesAccion = `
-            <button class="btn" onclick="verDetalle(${solicitud.id})" style="padding: 5px 10px; font-size: 12px;">Ver</button>
-            ${solicitud.estado === 'pendiente' ? 
-                `<button class="btn btn-success" onclick="autorizarSolicitud(${solicitud.id})" style="padding: 5px 10px; font-size: 12px;">Autorizar</button>` : 
-                ''}
-            <button class="btn btn-danger" onclick="cancelarSolicitud(${solicitud.id})" style="padding: 5px 10px; font-size: 12px;">Cancelar</button>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 3px; max-width: 140px;">
+                <button class="btn" onclick="verDetalle(${solicitud.id})" 
+                        style="padding: 5px; font-size: 16px; background: #5a6268; color: white;" title="Ver detalle">
+                    ●
+                </button>
+                ${puedeEditar ? 
+                    `<button class="btn" onclick="editarSolicitud(${solicitud.id})" 
+                            style="padding: 5px; font-size: 16px; background: #b8860b; color: white;" title="Editar">
+                        ✎
+                    </button>` : 
+                    `<button class="btn" disabled 
+                            style="padding: 5px; font-size: 16px; background: #d0d0d0; color: #808080; cursor: not-allowed; opacity: 0.6;" title="No editable">
+                        ✎
+                    </button>`}
+                ${puedeAutorizar ? 
+                    `<button class="btn" onclick="autorizarSolicitud(${solicitud.id})" 
+                            style="padding: 5px; font-size: 16px; background: #5a8a5a; color: white;" title="Autorizar">
+                        ✓
+                    </button>` : 
+                    `<button class="btn" disabled 
+                            style="padding: 5px; font-size: 16px; background: #d0d0d0; color: #808080; cursor: not-allowed; opacity: 0.6;" title="No autorizable">
+                        ✓
+                    </button>`}
+                ${puedeCancelar ?
+                    `<button class="btn" onclick="cancelarSolicitud(${solicitud.id})" 
+                            style="padding: 5px; font-size: 16px; background: #a05050; color: white;" title="Cancelar">
+                        ✕
+                    </button>` :
+                    `<button class="btn" disabled 
+                            style="padding: 5px; font-size: 16px; background: #d0d0d0; color: #808080; cursor: not-allowed; opacity: 0.6;" title="No puede cancelar">
+                        ✕
+                    </button>`}
+            </div>
+        `;
+        
+        const columnaPagada = tienePermiso('marcar_pagada') ? `
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
+                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                    <input type="checkbox" ${solicitud.pagada ? 'checked' : ''} 
+                           onchange="marcarComoPagada(${solicitud.id}, this.checked)"
+                           style="cursor: pointer;">
+                    <span style="font-size: 11px;">${solicitud.pagada ? 'Sí' : 'No'}</span>
+                </label>
+                ${tienePermiso('gestionar_comprobantes') ?
+                    `<button class="btn" onclick="gestionarComprobantePago(${solicitud.id})" 
+                            style="padding: 3px 8px; font-size: 10px; background: #4682b4; color: white;">
+                        ${iconoComprobante} Comprobante
+                    </button>` : ''}
+            </div>
+        ` : `<span style="font-size: 11px;">${solicitud.pagada ? 'Sí' : 'No'}</span>`;
+        
+        // Columna de Origen con información agrupada
+        const columnaOrigen = `
+            <div style="font-size: 13px; line-height: 1.5;">
+                <div style="font-weight: 600; color: var(--primary-color);">${solicitud.numero}</div>
+                <div style="color: #6c757d; font-size: 12px;">${getSucursalName(solicitud.sucursal)}</div>
+                <div style="color: #495057; font-size: 12px;">${empresa ? empresa.razonSocial : 'N/A'}</div>
+            </div>
         `;
         
         row.innerHTML = `
-            <td>${solicitud.numero}</td>
-            <td>${getSucursalName(solicitud.sucursal)}</td>
-            <td>${empresa ? empresa.razonSocial : 'N/A'}</td>
+            <td style="min-width: 180px;">${columnaOrigen}</td>
             <td>${solicitud.proveedor}</td>
-            <td>${solicitud.conceptoGeneral.substring(0, 30)}...</td>
-            <td>$${solicitud.total.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+            <td style="min-width: 200px;">${solicitud.conceptoGeneral.substring(0, 60)}${solicitud.conceptoGeneral.length > 60 ? '...' : ''}</td>
+            <td style="white-space: nowrap;">$${solicitud.total.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
             <td><span class="status ${solicitud.estado}">${solicitud.estado.toUpperCase()}</span></td>
-            <td>${new Date(solicitud.fechaSolicitud).toLocaleDateString('es-MX')}</td>
+            <td style="white-space: nowrap;">${formatearFecha(solicitud.fechaSolicitud)}</td>
+            <td>${columnaPagada}</td>
             <td class="acciones-column">${botonesAccion}</td>
         `;
     });
+}
+
+function exportarSolicitudesCSV() {
+    if (solicitudes.length === 0) {
+        alert('No hay solicitudes para exportar');
+        return;
+    }
+    
+    // Definir encabezados del CSV
+    const headers = [
+        'Número',
+        'Fecha Solicitud',
+        'Sucursal',
+        'Empresa',
+        'RFC Empresa',
+        'Proveedor',
+        'RFC Proveedor',
+        'Concepto General',
+        'Monto Total Concepto',
+        'Concepto Pago',
+        'Monto Pago',
+        'Subtotal',
+        'Descuento',
+        'Impuestos %',
+        'Monto Impuestos',
+        'Total a Pagar',
+        'Banco',
+        'Cuenta',
+        'CLABE',
+        'Ciudad',
+        'Estado',
+        'Fecha Autorización',
+        'Clave Anuncio',
+        'Creado Por'
+    ];
+    
+    // Crear filas de datos
+    const filas = solicitudes.map(sol => {
+        const empresa = empresas.find(e => e.id === sol.empresaId);
+        const proveedor = beneficiarios.find(p => p.id === sol.beneficiarioId);
+        
+        return [
+            sol.numero || '',
+            formatearFecha(sol.fechaSolicitud),
+            getSucursalName(sol.sucursal),
+            empresa ? empresa.razonSocial : '',
+            empresa ? empresa.rfc : '',
+            proveedor ? proveedor.nombre : sol.proveedor,
+            proveedor ? proveedor.rfc : '',
+            `"${(sol.conceptoGeneral || '').replace(/"/g, '""')}"`,
+            sol.montoConceptoGeneral || 0,
+            `"${(sol.conceptoPago || '').replace(/"/g, '""')}"`,
+            sol.subtotal || 0,
+            sol.subtotal || 0,
+            sol.descuento || 0,
+            sol.porcentajeImpuestos || 0,
+            sol.impuestos || 0,
+            sol.total || 0,
+            sol.banco || '',
+            sol.cuenta || '',
+            sol.clabe || '',
+            sol.ciudad || '',
+            sol.estado || '',
+            formatearFecha(sol.fechaAutorizacion),
+            sol.claveAnuncio || '',
+            sol.creadoPor || ''
+        ];
+    });
+    
+    // Construir contenido CSV
+    let csvContent = headers.join(',') + '\n';
+    filas.forEach(fila => {
+        csvContent += fila.join(',') + '\n';
+    });
+    
+    // Crear blob y descargar
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const fecha = new Date().toISOString().split('T')[0];
+    link.setAttribute('href', url);
+    link.setAttribute('download', `solicitudes_${fecha}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    alert('Archivo CSV descargado exitosamente');
+}
+
+function editarSolicitud(id) {
+    const solicitud = solicitudes.find(s => s.id === id);
+    if (!solicitud || solicitud.estado !== 'pendiente') {
+        alert('Solo se pueden editar solicitudes con estado pendiente');
+        return;
+    }
+    
+    // Cambiar a la pestaña de nueva solicitud
+    switchTab('nueva');
+    
+    // Cargar los datos de la solicitud en el formulario
+    document.getElementById('empresa').value = solicitud.empresaId;
+    document.getElementById('sucursal').value = solicitud.sucursal;
+    document.getElementById('beneficiario').value = solicitud.beneficiarioId;
+    
+    // Cargar datos del beneficiario
+    cargarDatosBeneficiario();
+    
+    document.getElementById('conceptoGeneral').value = solicitud.conceptoGeneral;
+    document.getElementById('montoConceptoGeneral').value = '$' + solicitud.montoConceptoGeneral.toLocaleString('es-MX', {minimumFractionDigits: 2});
+    document.getElementById('conceptoPago').value = solicitud.conceptoPago || '';
+    document.getElementById('claveAnuncio').value = solicitud.claveAnuncio || '';
+    document.getElementById('subtotal').value = '$' + solicitud.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2});
+    document.getElementById('descuento').value = '$' + solicitud.descuento.toLocaleString('es-MX', {minimumFractionDigits: 2});
+    document.getElementById('impuestos').value = solicitud.porcentajeImpuestos;
+    document.getElementById('ciudad').value = solicitud.ciudad;
+    
+    // Calcular total
+    calcularTotal();
+    
+    // Marcar que estamos editando (guardar el ID)
+    document.getElementById('solicitudForm').setAttribute('data-editing-id', id);
+    
+    // Cambiar el texto del botón
+    const submitButton = document.querySelector('#solicitudForm button[type="submit"]');
+    submitButton.textContent = 'Actualizar Solicitud';
+    submitButton.style.background = '#ffc107';
+    
+    alert('Editando solicitud ' + solicitud.numero + '. Modifique los campos necesarios y presione "Actualizar Solicitud"');
 }
 
 // SECCIÓN 2 - Visualización y PDF Mejorado
@@ -651,61 +1065,134 @@ function verDetalle(id) {
     title.textContent = `Solicitud ${solicitud.numero}`;
     
     const empresa = empresas.find(e => e.id === solicitud.empresaId);
+    const proveedor = beneficiarios.find(p => p.id === solicitud.beneficiarioId);
     
-    let htmlVinculadas = '';
-    if (solicitud.solicitudesVinculadas && solicitud.solicitudesVinculadas.length > 0) {
-        htmlVinculadas = '<div style="margin: 15px 0; padding: 10px; background: #f8f9fa; border-left: 3px solid #d01f34;"><strong>Solicitudes Vinculadas:</strong><ul style="margin: 5px 0 0 20px;">';
-        solicitud.solicitudesVinculadas.forEach(idVinculada => {
-            const solVinculada = solicitudes.find(s => s.id == idVinculada);
-            if (solVinculada) {
-                htmlVinculadas += `<li>${solVinculada.numero} - ${solVinculada.conceptoGeneral}</li>`;
-            }
-        });
-        htmlVinculadas += '</ul></div>';
+    // Determinar qué logo mostrar según la empresa
+    let logoHTML = '';
+    if (empresa) {
+        const nombreEmpresa = empresa.razonSocial.toUpperCase();
+        if (nombreEmpresa.includes('A.T.M. ESPECTACULARES') || nombreEmpresa.includes('ATM ESPECTACULARES')) {
+            logoHTML = '<img src="assets/img/logo-atm.png" alt="ATM Espectaculares" style="max-width: 173px; height: auto;" onerror="this.style.display=\'none\'">';
+        } else if (nombreEmpresa.includes('ANUNCIOS TECNICOS MOCTEZUMA') || nombreEmpresa.includes('ANUNCIOS TÉCNICOS MOCTEZUMA')) {
+            logoHTML = '<img src="assets/img/logo-anuncios.png" alt="Anuncios Técnicos Moctezuma" style="max-width: 173px; height: auto;" onerror="this.style.display=\'none\'">';
+        } else if (nombreEmpresa.includes('DESPACHO S/C')) {
+            logoHTML = '<div style="font-size: 32px; font-weight: bold; color: #333; padding: 20px;">DESPACHO S/C</div>';
+        } else {
+            logoHTML = `<div style="font-size: 24px; font-weight: bold; color: #333; padding: 20px;">${empresa.razonSocial}</div>`;
+        }
     }
     
-    content.innerHTML = `
-        <div id="contenidoImprimible" style="font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; background: white;">
+    // Generar tabla de solicitudes vinculadas
+    let htmlVinculadas = '';
+    
+    // Buscar todas las solicitudes que compartan el mismo concepto general
+    const solicitudesRelacionadas = solicitudes.filter(sol => 
+        sol.conceptoGeneral === solicitud.conceptoGeneral && sol.estado !== 'cancelada');
+    
+    // SIEMPRE mostrar la tabla (incluso si solo hay una solicitud)
+    const totalPagosRealizados = solicitudesRelacionadas
+        .reduce((sum, sol) => sum + sol.subtotal, 0);
+    
+    const montoPendiente = (solicitud.montoConceptoGeneral || 0) - totalPagosRealizados;
+    
+    htmlVinculadas = `
+        <div style="margin: 8px 0; padding: 6px; background: #f8f9fa; border: 1px solid #d01f34;">
+            <strong style="font-size: 9px; display: block; margin-bottom: 4px;">DESGLOSE DE PAGOS DEL CONCEPTO GENERAL:</strong>
+            <table style="width: 100%; font-size: 9px; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #e0e0e0;">
+                        <th style="padding: 3px; border: 1px solid #ccc; text-align: left;">Fecha</th>
+                        <th style="padding: 3px; border: 1px solid #ccc; text-align: left;">Número</th>
+                        <th style="padding: 3px; border: 1px solid #ccc; text-align: left;">Concepto de Pago</th>
+                        <th style="padding: 3px; border: 1px solid #ccc; text-align: right;">Monto de Pago</th>
+                        <th style="padding: 3px; border: 1px solid #ccc; text-align: center;">Estatus</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    if (solicitudesRelacionadas.length > 0) {
+        solicitudesRelacionadas.forEach(sol => {
+            const estadoTexto = sol.estado === 'autorizada' ? 'Aprobada' : 'Pendiente';
+            const esActual = sol.id === solicitud.id;
+            const estiloFila = esActual ? 'background: #fffacd; font-weight: bold;' : '';
             
-            <!-- Logo ATM -->
-            <div style="text-align: center; margin-bottom: 20px;">
-                <img src="logo-atm.png" alt="ATM Espectaculares" style="max-width: 300px; height: auto;" onerror="this.style.display='none'">
+            htmlVinculadas += `
+                <tr style="${estiloFila}">
+                    <td style="padding: 3px; border: 1px solid #ccc;">${formatearFecha(sol.fechaSolicitud)}</td>
+                    <td style="padding: 3px; border: 1px solid #ccc;">${sol.numero}${esActual ? ' (Actual)' : ''}</td>
+                    <td style="padding: 3px; border: 1px solid #ccc;">${sol.conceptoPago || 'N/A'}</td>
+                    <td style="padding: 3px; border: 1px solid #ccc; text-align: right;">$${sol.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                    <td style="padding: 3px; border: 1px solid #ccc; text-align: center;">${estadoTexto}</td>
+                </tr>
+            `;
+        });
+    } else {
+        htmlVinculadas += `
+            <tr>
+                <td colspan="5" style="padding: 3px; border: 1px solid #ccc; text-align: center; color: #999;">
+                    No hay pagos registrados para este concepto
+                </td>
+            </tr>
+        `;
+    }
+    
+    htmlVinculadas += `
+                <tr style="background: #fff3cd; font-weight: bold;">
+                    <td colspan="3" style="padding: 3px; border: 1px solid #ccc; text-align: right;">MONTO PENDIENTE DE PAGO:</td>
+                    <td style="padding: 3px; border: 1px solid #ccc; text-align: right;">$${montoPendiente.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                    <td style="padding: 3px; border: 1px solid #ccc;"></td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    `;
+    
+    content.innerHTML = `
+        <div id="contenidoImprimible" style="font-family: Arial, sans-serif; padding: 10px; max-width: 750px; margin: 0 auto; background: white;">
+            
+            <div style="text-align: center; margin-bottom: 8px;">
+                ${logoHTML}
             </div>
             
-            <!-- Encabezado con borde -->
-            <div style="border: 3px solid #d01f34; padding: 20px; margin-bottom: 20px;">
-                <div style="border: 1px solid #606060; padding: 15px;">
-                    <h2 style="text-align: center; color: #d01f34; margin: 0 0 10px 0; font-size: 22px;">SOLICITUD DE FONDOS</h2>
-                    <h3 style="text-align: center; color: #606060; margin: 0; font-size: 18px;">${solicitud.numero}</h3>
-                    <hr style="border: none; border-top: 1px solid #d01f34; margin: 15px 0;">
+            <!-- Sección de Empresa separada -->
+            <div style="background: #f5f5f5; padding: 8px; margin-bottom: 10px; border: 2px solid #606060; text-align: center;">
+                <table style="width: 100%; font-size: 9px;">
+                    <colgroup>
+                        <col style="width: 35%;">
+                        <col style="width: 65%;">
+                    </colgroup>
+                    <tr>
+                        <td style="padding: 3px;"><strong>EMPRESA:</strong> ${empresa ? empresa.razonSocial : 'N/A'}</td>
+                        <td style="padding: 3px;"><strong>RFC:</strong> ${empresa ? empresa.rfc : 'N/A'}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div style="border: 2px solid #d01f34; padding: 10px; margin-bottom: 10px;">
+                <div style="border: 1px solid #606060; padding: 8px;">
+                    <h2 style="text-align: center; color: #d01f34; margin: 0 0 4px 0; font-size: 14px;">SOLICITUD DE FONDOS</h2>
+                    <h3 style="text-align: center; color: #606060; margin: 0; font-size: 11px;">${solicitud.numero}</h3>
+                    <hr style="border: none; border-top: 1px solid #d01f34; margin: 6px 0;">
                     
-                    <!-- Información General -->
-                    <div style="background: #f5f5f5; padding: 15px; margin: 10px 0; border: 1px solid #606060;">
-                        <table style="width: 100%; font-size: 12px;">
-                            <tr>
-                                <td style="padding: 5px; width: 30%;"><strong>EMPRESA:</strong></td>
-                                <td style="padding: 5px;">${empresa ? empresa.razonSocial : 'N/A'}</td>
+                    <div style="background: #f5f5f5; padding: 8px; margin: 5px 0; border: 1px solid #606060;">
+                        <table style="width: 100%; font-size: 8px;">
+                        <colgroup>
+                            <col style="width: 35%;">
+                            <col style="width: 65%;">
+                        </colgroup>    
+                        <tr>
+                                <td style="padding: 2px;"><strong>FECHA:</strong></td>
+                                <td style="padding: 2px;">${formatearFecha(solicitud.fechaSolicitud)}</td>
                             </tr>
                             <tr>
-                                <td style="padding: 5px;"><strong>RFC:</strong></td>
-                                <td style="padding: 5px;">${empresa ? empresa.rfc : 'N/A'}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 5px;"><strong>PROVEEDOR:</strong></td>
-                                <td style="padding: 5px;">${solicitud.proveedor}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 5px;"><strong>FECHA:</strong></td>
-                                <td style="padding: 5px;">${new Date(solicitud.fechaSolicitud).toLocaleDateString('es-MX')}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 5px;"><strong>SUCURSAL:</strong></td>
-                                <td style="padding: 5px;">${getSucursalName(solicitud.sucursal)}</td>
+                                <td style="padding: 2px;"><strong>SUCURSAL:</strong></td>
+                                <td style="padding: 2px;">${getSucursalName(solicitud.sucursal)}</td>
                             </tr>
                             ${solicitud.claveAnuncio ? `
                             <tr>
-                                <td style="padding: 5px;"><strong>CLAVE ANUNCIO:</strong></td>
-                                <td style="padding: 5px;">${solicitud.claveAnuncio}</td>
+                                <td style="padding: 2px;"><strong>CLAVE ANUNCIO:</strong></td>
+                                <td style="padding: 2px;">${solicitud.claveAnuncio}</td>
                             </tr>
                             ` : ''}
                         </table>
@@ -713,85 +1200,125 @@ function verDetalle(id) {
                     
                     ${htmlVinculadas}
                     
-                    <!-- Concepto -->
-                    <div style="margin: 15px 0;">
-                        <div style="background: #d01f34; color: white; padding: 8px; font-weight: bold; font-size: 12px;">CONCEPTO</div>
-                        <div style="padding: 10px; border: 1px solid #606060; border-top: none; font-size: 11px;">
-                            <p style="margin: 5px 0;"><strong>Concepto General:</strong></p>
-                            <p style="margin: 5px 0;">${solicitud.conceptoGeneral}</p>
-                            <p style="margin: 10px 0 5px 0;"><strong>Monto Total del Concepto General:</strong> $${(solicitud.montoConceptoGeneral || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
-                            ${solicitud.conceptoPago ? `
-                                <p style="margin: 10px 0 5px 0;"><strong>Concepto de Pago Específico:</strong></p>
-                                <p style="margin: 5px 0;">${solicitud.conceptoPago}</p>
-                            ` : ''}
-                        </div>
-                    </div>
-                    
-                    <!-- Montos -->
-                    <div style="margin: 15px 0;">
-                        <div style="background: #d01f34; color: white; padding: 8px; font-weight: bold; font-size: 12px;">MONTOS</div>
-                        <div style="padding: 10px; border: 1px solid #606060; border-top: none;">
-                            <table style="width: 100%; font-size: 11px; background: #fafafa;">
+                    <!-- PROVEEDOR -->
+                    <div style="margin: 8px 0;">
+                        <div style="background: #d01f34; color: white; padding: 4px; font-weight: bold; font-size: 9px;">PROVEEDOR</div>
+                        <div style="padding: 6px; border: 1px solid #606060; border-top: none; background: #fafafa;">
+                            <table style="width: 100%; font-size: 8px; table-layout: fixed;">
+                                <colgroup>
+                                    <col style="width: 35%;">
+                                    <col style="width: 65%;">
+                                </colgroup>
                                 <tr>
-                                    <td style="padding: 8px; border-bottom: 1px solid #ddd;">Monto del Concepto de Pago:</td>
-                                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$${solicitud.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>NOMBRE:</strong></td>
+                                    <td style="padding: 2px; word-wrap: break-word;">${proveedor ? proveedor.nombre : solicitud.proveedor}</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 8px; border-bottom: 1px solid #ddd;">Descuento:</td>
-                                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$${solicitud.descuento.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>RAZÓN SOCIAL:</strong></td>
+                                    <td style="padding: 2px; word-wrap: break-word;">${proveedor ? proveedor.razonSocial : solicitud.proveedor}</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 8px; border-bottom: 1px solid #ddd;">Impuestos (${solicitud.porcentajeImpuestos || 0}%):</td>
-                                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$${(solicitud.impuestos || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>RFC:</strong></td>
+                                    <td style="padding: 2px;">${proveedor ? proveedor.rfc : 'N/A'}</td>
                                 </tr>
-                                <tr style="font-weight: bold; font-size: 13px;">
-                                    <td style="padding: 8px; background: #f0f0f0;">TOTAL A PAGAR:</td>
-                                    <td style="padding: 8px; text-align: right; background: #f0f0f0;">$${solicitud.total.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                                <tr>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>BANCO:</strong></td>
+                                    <td style="padding: 2px;">${solicitud.banco}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>CUENTA:</strong></td>
+                                    <td style="padding: 2px;">${solicitud.cuenta}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>CLABE:</strong></td>
+                                    <td style="padding: 2px;">${solicitud.clabe}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>CIUDAD:</strong></td>
+                                    <td style="padding: 2px;">${solicitud.ciudad}</td>
                                 </tr>
                             </table>
                         </div>
                     </div>
                     
-                    <!-- Datos Bancarios -->
-                    <div style="margin: 15px 0;">
-                        <div style="background: #d01f34; color: white; padding: 8px; font-weight: bold; font-size: 12px;">DATOS BANCARIOS</div>
-                        <div style="padding: 10px; border: 1px solid #606060; border-top: none; font-size: 11px;">
-                            <table style="width: 100%;">
+                    <!-- CONCEPTO -->
+                    <div style="margin: 8px 0;">
+                        <div style="background: #d01f34; color: white; padding: 4px; font-weight: bold; font-size: 9px;">CONCEPTO</div>
+                        <div style="padding: 6px; border: 1px solid #606060; border-top: none; background: #fafafa;">
+                            <table style="width: 100%; font-size: 8px; table-layout: fixed;">
+                                <colgroup>
+                                    <col style="width: 35%;">
+                                    <col style="width: 65%;">
+                                </colgroup>
                                 <tr>
-                                    <td style="padding: 5px; width: 30%;"><strong>Banco:</strong></td>
-                                    <td style="padding: 5px;">${solicitud.banco}</td>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>CONCEPTO GENERAL:</strong></td>
+                                    <td style="padding: 2px; word-wrap: break-word;">${solicitud.conceptoGeneral}</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 5px;"><strong>Cuenta:</strong></td>
-                                    <td style="padding: 5px;">${solicitud.cuenta}</td>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>MONTO TOTAL DEL CONCEPTO:</strong></td>
+                                    <td style="padding: 2px;">$${(solicitud.montoConceptoGeneral || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                                </tr>
+                                ${solicitud.conceptoPago ? `
+                                <tr>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>CONCEPTO DE PAGO:</strong></td>
+                                    <td style="padding: 2px; word-wrap: break-word;">${solicitud.conceptoPago}</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 5px;"><strong>CLABE:</strong></td>
-                                    <td style="padding: 5px;">${solicitud.clabe}</td>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>Monto del Concepto de Pago:</strong></td>
+                                    <td style="padding: 2px;">$${solicitud.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                                </tr>
+                                ` : `
+                                <tr>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>Monto del Concepto de Pago:</strong></td>
+                                    <td style="padding: 2px;">$${solicitud.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                                </tr>
+                                `}
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- MONTOS -->
+                    <div style="margin: 8px 0;">
+                        <div style="background: #d01f34; color: white; padding: 4px; font-weight: bold; font-size: 9px;">MONTOS</div>
+                        <div style="padding: 6px; border: 1px solid #606060; border-top: none; background: #fafafa;">
+                            <table style="width: 100%; font-size: 8px; table-layout: fixed;">
+                                <colgroup>
+                                    <col style="width: 35%;">
+                                    <col style="width: 65%;">
+                                </colgroup>
+                                <tr>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>Subtotal:</strong></td>
+                                    <td style="padding: 2px;">$${solicitud.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 5px;"><strong>Ciudad:</strong></td>
-                                    <td style="padding: 5px;">${solicitud.ciudad}</td>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>Descuento:</strong></td>
+                                    <td style="padding: 2px;">$${solicitud.descuento.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 2px; vertical-align: top;"><strong>Impuestos (${solicitud.porcentajeImpuestos || 0}%):</strong></td>
+                                    <td style="padding: 2px;">$${(solicitud.impuestos || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                                </tr>
+                                <tr style="font-weight: bold; font-size: 9px; background: #f0f0f0;">
+                                    <td style="padding: 3px; vertical-align: top;"><strong>TOTAL A PAGAR:</strong></td>
+                                    <td style="padding: 3px;">$${solicitud.total.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
                                 </tr>
                             </table>
                         </div>
                     </div>
                     
-                    <hr style="border: none; border-top: 1px solid #d01f34; margin: 15px 0;">
+                    <hr style="border: none; border-top: 1px solid #d01f34; margin: 6px 0;">
                     
-                    <!-- Estado y Firmas -->
-                    <div style="font-size: 11px; margin: 15px 0;">
-                        <p><strong>Estado:</strong> <span class="status ${solicitud.estado}" style="display: inline-block; padding: 5px 10px; border-radius: 3px;">${solicitud.estado.toUpperCase()}</span></p>
-                        <p><strong>Fecha de solicitud:</strong> ${new Date(solicitud.fechaSolicitud).toLocaleDateString('es-MX')}</p>
-                        ${solicitud.fechaAutorizacion ? `<p><strong>Fecha de autorización:</strong> ${new Date(solicitud.fechaAutorizacion).toLocaleDateString('es-MX')}</p>` : ''}
-                        ${solicitud.archivos && solicitud.archivos.length > 0 ? `<p><strong>Archivos adjuntos:</strong> ${solicitud.archivos.length} archivo(s)</p>` : ''}
+                    <div style="font-size: 8px; margin: 6px 0;">
+                        <p style="margin: 2px 0;"><strong>Estado:</strong> <span class="status ${solicitud.estado}" style="display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 8px;">${solicitud.estado.toUpperCase()}</span></p>
+                        <p style="margin: 2px 0;"><strong>Fecha de solicitud:</strong> ${formatearFecha(solicitud.fechaSolicitud)}</p>
+                        ${solicitud.fechaAutorizacion ? `<p style="margin: 2px 0;"><strong>Fecha de autorización:</strong> ${formatearFecha(solicitud.fechaAutorizacion)}</p>` : ''}
+                        ${solicitud.archivos && solicitud.archivos.length > 0 ? `<p style="margin: 2px 0;"><strong>Archivos adjuntos:</strong> ${solicitud.archivos.length} archivo(s)</p>` : ''}
                     </div>
                     
-                    <!-- Área de Firma -->
-                    <div style="margin-top: 30px; text-align: center;">
-                        <div style="border: 1px solid #606060; width: 250px; height: 60px; margin: 0 auto;"></div>
-                        <p style="margin: 10px 0 0 0; font-weight: bold; font-size: 11px;">Gerente de Sucursales</p>
-                        <p style="margin: 5px 0 0 0; font-size: 10px;">Sergio Maurer</p>
+                    <div style="margin-top: 12px; text-align: center;">
+                        <div style="border: 1px solid #606060; width: 200px; height: 40px; margin: 0 auto;"></div>
+                        <p style="margin: 4px 0 0 0; font-weight: bold; font-size: 8px;">Gerente de Sucursales</p>
+                        <p style="margin: 2px 0 0 0; font-size: 7px;">Sergio Maurer</p>
                     </div>
                     
                 </div>
@@ -824,22 +1351,26 @@ function imprimirSolicitud() {
                 @media print {
                     body {
                         margin: 0;
-                        padding: 20px;
+                        padding: 10px;
                     }
                     @page {
-                        margin: 1cm;
+                        margin: 0.5cm;
+                        size: letter;
                     }
                 }
                 body {
                     font-family: Arial, sans-serif;
                     margin: 0;
-                    padding: 20px;
+                    padding: 10px;
+                }
+                table {
+                    border-collapse: collapse;
                 }
                 .status {
                     display: inline-block;
-                    padding: 5px 10px;
+                    padding: 2px 6px;
                     border-radius: 3px;
-                    font-size: 12px;
+                    font-size: 8px;
                     font-weight: bold;
                 }
                 .status.pendiente {
@@ -855,7 +1386,7 @@ function imprimirSolicitud() {
                     color: #721c24;
                 }
                 img {
-                    max-width: 300px;
+                    max-width: 173px;
                     height: auto;
                 }
             </style>
@@ -883,23 +1414,29 @@ function cerrarModal() {
     document.getElementById('detalleModal').style.display = 'none';
 }
 
-function autorizarSolicitud(id) {
+async function autorizarSolicitud(id) {
     const solicitud = solicitudes.find(s => s.id === id);
     if (solicitud && solicitud.estado === 'pendiente') {
         if (confirm('¿Está seguro de autorizar esta solicitud?')) {
             solicitud.estado = 'autorizada';
             solicitud.fechaAutorizacion = new Date().toISOString();
+            
+            await actualizarSolicitudSupabase(solicitud);
+            await cargarDatosDesdeSupabase();
             cargarSolicitudes();
             alert('Solicitud autorizada exitosamente');
         }
     }
 }
 
-function cancelarSolicitud(id) {
+async function cancelarSolicitud(id) {
     const solicitud = solicitudes.find(s => s.id === id);
     if (solicitud && solicitud.estado !== 'cancelada') {
         if (confirm('¿Está seguro de cancelar esta solicitud?')) {
             solicitud.estado = 'cancelada';
+            
+            await actualizarSolicitudSupabase(solicitud);
+            await cargarDatosDesdeSupabase();
             cargarSolicitudes();
             alert('Solicitud cancelada');
         }
@@ -914,6 +1451,7 @@ function descargarPDF(id) {
     const doc = new jsPDF();
     
     const empresa = empresas.find(e => e.id === solicitud.empresaId);
+    const proveedor = beneficiarios.find(p => p.id === solicitud.beneficiarioId);
     
     const colorPrincipal = [208, 31, 52];
     const colorGris = [96, 96, 96];
@@ -945,9 +1483,9 @@ function descargarPDF(id) {
     let yPos = 55;
     
     doc.setFillColor(240, 240, 240);
-    doc.rect(20, yPos - 5, 170, 42, 'F');
+    doc.rect(20, yPos - 5, 170, 49, 'F');
     doc.setDrawColor(colorGris[0], colorGris[1], colorGris[2]);
-    doc.rect(20, yPos - 5, 170, 42);
+    doc.rect(20, yPos - 5, 170, 49);
     
     doc.setFont("helvetica", "bold");
     doc.setTextColor(colorGris[0], colorGris[1], colorGris[2]);
@@ -965,7 +1503,16 @@ function descargarPDF(id) {
     doc.setFont("helvetica", "bold");
     doc.text('PROVEEDOR:', 25, yPos);
     doc.setFont("helvetica", "normal");
-    doc.text(solicitud.proveedor, 55, yPos);
+    doc.text(proveedor ? proveedor.nombre : solicitud.proveedor, 55, yPos);
+    
+    yPos += 7;
+    doc.setFont("helvetica", "bold");
+    doc.text('RAZÓN SOCIAL:', 25, yPos);
+    doc.setFont("helvetica", "normal");
+    const razonSocialText = proveedor ? proveedor.razonSocial : solicitud.proveedor;
+    const razonSocialLines = doc.splitTextToSize(razonSocialText, 120);
+    doc.text(razonSocialLines, 60, yPos);
+    yPos += (razonSocialLines.length - 1) * 5;
     
     yPos += 7;
     doc.setFont("helvetica", "bold");
@@ -1176,7 +1723,7 @@ function buscarPorConcepto() {
                     <td>${sol.conceptoPago || 'N/A'}</td>
                     <td>$${sol.total.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
                     <td><span class="status ${sol.estado}">${sol.estado.toUpperCase()}</span></td>
-                    <td>${new Date(sol.fechaSolicitud).toLocaleDateString('es-MX')}</td>
+                    <td>${formatearFecha(sol.fechaSolicitud)}</td>
                     <td>
                         <button class="btn" onclick="gestionarArchivos(${sol.id})" style="padding: 5px 10px; font-size: 11px;">
                             ${numArchivos > 0 ? `Archivos (${numArchivos})` : 'Subir'}
@@ -1220,7 +1767,7 @@ function gestionarArchivos(solicitudId) {
         solicitud.archivos.forEach((archivo, index) => {
             htmlArchivos += `
                 <div class="archivo-item">
-                    <span>${archivo.nombre} <small style="color: #999;">(${new Date(archivo.fecha).toLocaleDateString('es-MX')})</small></span>
+                    <span>${archivo.nombre} <small style="color: #999;">(${formatearFecha(archivo.fecha)})</small></span>
                     <div>
                         ${puedeDescargar ? 
                             `<button class="btn btn-secondary" onclick="descargarArchivo(${solicitudId}, ${index})" style="padding: 5px 10px; font-size: 12px;">Descargar</button>
@@ -1318,21 +1865,34 @@ function cargarUsuarios() {
             <td>${usuario.sucursal ? getSucursalName(usuario.sucursal) : 'N/A'}</td>
             <td>
                 <button class="btn btn-secondary" onclick="editarUsuario('${username}')" style="padding: 5px 10px; font-size: 12px;">Editar</button>
-                ${username !== 'smaurer' ? `<button class="btn btn-danger" onclick="eliminarUsuario('${username}')" style="padding: 5px 10px; font-size: 12px;">Eliminar</button>` : ''}
+                ${username !== 'admin_unico' ? `<button class="btn btn-danger" onclick="eliminarUsuario('${username}')" style="padding: 5px 10px; font-size: 12px;">Eliminar</button>` : ''}
             </td>
         `;
     });
 }
 
 function mostrarFormularioUsuario(username = null) {
-    if (!verificarPermisoAdmin()) return;
+    if (!tienePermiso('gestionar_usuarios')) {
+        alert('No tiene permisos para gestionar usuarios');
+        return;
+    }
     
     const modal = document.getElementById('usuarioModal');
     const title = document.getElementById('usuarioModalTitle');
     const form = document.getElementById('usuarioForm');
+    const rolSelect = document.getElementById('usuarioRol');
     
     form.reset();
     editandoUsuario = username;
+    
+    // Cargar roles dinámicamente
+    rolSelect.innerHTML = '<option value="">Seleccione rol</option>';
+    Object.keys(rolesConfig).forEach(codigoRol => {
+        const option = document.createElement('option');
+        option.value = codigoRol;
+        option.textContent = rolesConfig[codigoRol].nombre;
+        rolSelect.appendChild(option);
+    });
     
     if (username) {
         title.textContent = 'Editar Usuario';
@@ -1357,7 +1917,7 @@ function editarUsuario(username) {
 }
 
 function eliminarUsuario(username) {
-    if (username === 'smaurer') {
+    if (username === 'admin_unico') {
         alert('No se puede eliminar el usuario administrador principal');
         return;
     }
@@ -1375,7 +1935,7 @@ function toggleSucursalField() {
     const sucursalGroup = document.getElementById('usuarioSucursalGroup');
     const sucursalSelect = document.getElementById('usuarioSucursal');
     
-    if (rol === 'jefe') {
+    if (rol && rolesConfig[rol] && rolesConfig[rol].requiereSucursal) {
         sucursalGroup.style.display = 'block';
         sucursalSelect.required = true;
     } else {
@@ -1435,7 +1995,10 @@ function cargarProveedores() {
     beneficiarios.forEach(proveedor => {
         const row = tbody.insertRow();
         row.innerHTML = `
-            <td>${proveedor.nombre}</td>
+            <td>
+                <strong>${proveedor.nombre}</strong>
+                ${proveedor.razonSocial ? `<br><small style="color: #666;">${proveedor.razonSocial}</small>` : ''}
+            </td>
             <td>${proveedor.rfc || 'N/A'}</td>
             <td>${proveedor.banco}</td>
             <td>${proveedor.cuenta}</td>
@@ -1447,6 +2010,61 @@ function cargarProveedores() {
             </td>
         `;
     });
+}
+
+function exportarProveedoresCSV() {
+    if (beneficiarios.length === 0) {
+        alert('No hay proveedores para exportar');
+        return;
+    }
+    
+    // Definir encabezados del CSV
+    const headers = [
+        'ID',
+        'Nombre',
+        'Razón Social',
+        'RFC',
+        'Banco',
+        'Cuenta',
+        'CLABE',
+        'Tiene CSF'
+    ];
+    
+    // Crear filas de datos
+    const filas = beneficiarios.map(prov => {
+        return [
+            prov.id,
+            `"${(prov.nombre || '').replace(/"/g, '""')}"`,
+            `"${(prov.razonSocial || '').replace(/"/g, '""')}"`,
+            prov.rfc || '',
+            prov.banco || '',
+            prov.cuenta || '',
+            prov.clabe || '',
+            prov.csf ? 'Sí' : 'No'
+        ];
+    });
+    
+    // Construir contenido CSV
+    let csvContent = headers.join(',') + '\n';
+    filas.forEach(fila => {
+        csvContent += fila.join(',') + '\n';
+    });
+    
+    // Crear blob y descargar
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const fecha = new Date().toISOString().split('T')[0];
+    link.setAttribute('href', url);
+    link.setAttribute('download', `proveedores_${fecha}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    alert('Archivo CSV descargado exitosamente');
 }
 
 function mostrarFormularioProveedor(id = null) {
@@ -1464,6 +2082,7 @@ function mostrarFormularioProveedor(id = null) {
         const proveedor = beneficiarios.find(b => b.id === id);
         if (proveedor) {
             document.getElementById('proveedorNombre').value = proveedor.nombre;
+            document.getElementById('proveedorRazonSocial').value = proveedor.razonSocial || '';
             document.getElementById('proveedorRFC').value = proveedor.rfc || '';
             document.getElementById('proveedorBanco').value = proveedor.banco;
             document.getElementById('proveedorCuenta').value = proveedor.cuenta;
@@ -1480,57 +2099,70 @@ function editarProveedor(id) {
     mostrarFormularioProveedor(id);
 }
 
-function eliminarProveedor(id) {
+async function eliminarProveedor(id) {
     if (!verificarPermisoAdmin()) return;
     
     if (confirm('¿Está seguro de eliminar este proveedor?')) {
-        const index = beneficiarios.findIndex(b => b.id === id);
-        if (index > -1) {
-            beneficiarios.splice(index, 1);
+        try {
+            await eliminarBeneficiarioSupabase(id);
+            const index = beneficiarios.findIndex(b => b.id === id);
+            if (index > -1) {
+                beneficiarios.splice(index, 1);
+            }
+            await cargarDatosDesdeSupabase();
             cargarProveedores();
             cargarBeneficiariosSelect();
-            guardarDatos();
             alert('Proveedor eliminado exitosamente');
+        } catch (error) {
+            alert('Error al eliminar proveedor');
         }
     }
 }
 
-function guardarProveedor(event) {
+async function guardarProveedor(event) {
     event.preventDefault();
     
     const nombre = document.getElementById('proveedorNombre').value;
+    const razonSocial = document.getElementById('proveedorRazonSocial').value;
     const rfc = document.getElementById('proveedorRFC').value.toUpperCase();
     const banco = document.getElementById('proveedorBanco').value;
     const cuenta = document.getElementById('proveedorCuenta').value;
     const clabe = document.getElementById('proveedorClabe').value;
     
-    if (editandoProveedor) {
-        const proveedor = beneficiarios.find(b => b.id === editandoProveedor);
-        if (proveedor) {
-            proveedor.nombre = nombre;
-            proveedor.rfc = rfc;
-            proveedor.banco = banco;
-            proveedor.cuenta = cuenta;
-            proveedor.clabe = clabe;
+    try {
+        if (editandoProveedor) {
+            const proveedor = beneficiarios.find(b => b.id === editandoProveedor);
+            if (proveedor) {
+                proveedor.nombre = nombre;
+                proveedor.razonSocial = razonSocial;
+                proveedor.rfc = rfc;
+                proveedor.banco = banco;
+                proveedor.cuenta = cuenta;
+                proveedor.clabe = clabe;
+                await guardarBeneficiarioSupabase(proveedor);
+            }
+        } else {
+            const nuevoProveedor = {
+                nombre: nombre,
+                razonSocial: razonSocial,
+                rfc: rfc,
+                banco: banco,
+                cuenta: cuenta,
+                clabe: clabe,
+                csf: null
+            };
+            const proveedorGuardado = await guardarBeneficiarioSupabase(nuevoProveedor);
+            beneficiarios.push(proveedorGuardado);
         }
-    } else {
-        const nuevoId = beneficiarios.length > 0 ? Math.max(...beneficiarios.map(b => b.id)) + 1 : 1;
-        beneficiarios.push({
-            id: nuevoId,
-            nombre: nombre,
-            rfc: rfc,
-            banco: banco,
-            cuenta: cuenta,
-            clabe: clabe,
-            csf: null
-        });
+        
+        cerrarModalProveedor();
+        await cargarDatosDesdeSupabase();
+        cargarProveedores();
+        cargarBeneficiariosSelect();
+        alert(editandoProveedor ? 'Proveedor actualizado exitosamente' : 'Proveedor creado exitosamente');
+    } catch (error) {
+        alert('Error al guardar proveedor');
     }
-    
-    cerrarModalProveedor();
-    cargarProveedores();
-    cargarBeneficiariosSelect();
-    guardarDatos();
-    alert(editandoProveedor ? 'Proveedor actualizado exitosamente' : 'Proveedor creado exitosamente');
 }
 
 function cerrarModalProveedor() {
@@ -1549,6 +2181,7 @@ function gestionarCSF(proveedorId) {
     
     info.innerHTML = `
         <p><strong>Proveedor:</strong> ${proveedor.nombre}</p>
+        ${proveedor.razonSocial ? `<p><strong>Razón Social:</strong> ${proveedor.razonSocial}</p>` : ''}
         <p><strong>RFC:</strong> ${proveedor.rfc || 'N/A'}</p>
     `;
     
@@ -1556,7 +2189,7 @@ function gestionarCSF(proveedorId) {
         csfActual.innerHTML = `
             <h4>CSF Actual:</h4>
             <div class="archivo-item">
-                <span>${proveedor.csf.nombre} <small style="color: #999;">(${new Date(proveedor.csf.fecha).toLocaleDateString('es-MX')})</small></span>
+                <span>${proveedor.csf.nombre} <small style="color: #999;">(${formatearFecha(proveedor.csf.fecha)})</small></span>
                 <div>
                     <button class="btn btn-secondary" onclick="descargarCSF(${proveedorId})" style="padding: 5px 10px; font-size: 12px;">Descargar</button>
                     <button class="btn btn-danger" onclick="eliminarCSF(${proveedorId})" style="padding: 5px 10px; font-size: 12px;">Eliminar</button>
@@ -1570,7 +2203,7 @@ function gestionarCSF(proveedorId) {
     modal.style.display = 'block';
 }
 
-function subirCSF() {
+async function subirCSF() {
     const input = document.getElementById('archivoCSF');
     const file = input.files[0];
     
@@ -1587,22 +2220,43 @@ function subirCSF() {
     const proveedor = beneficiarios.find(p => p.id === proveedorActualCSF);
     if (!proveedor) return;
     
-    const reader = new FileReader();
+    mostrarCargando(true);
     
-    reader.onload = function(e) {
-        proveedor.csf = {
-            nombre: file.name,
-            datos: e.target.result,
-            fecha: new Date().toISOString()
+    if (usarSupabase) {
+        const url = await subirArchivoSupabase(file, 'csf');
+        if (url) {
+            proveedor.csf = {
+                nombre: file.name,
+                datos: url,
+                fecha: new Date().toISOString()
+            };
+            
+            await guardarBeneficiarioSupabase(proveedor);
+            await cargarDatosDesdeSupabase();
+            alert('Constancia de Situación Fiscal subida exitosamente');
+            gestionarCSF(proveedorActualCSF);
+            input.value = '';
+        } else {
+            alert('Error al subir el archivo');
+        }
+    } else {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            proveedor.csf = {
+                nombre: file.name,
+                datos: e.target.result,
+                fecha: new Date().toISOString()
+            };
+            
+            guardarDatosLocalStorage();
+            alert('Constancia de Situación Fiscal subida exitosamente');
+            gestionarCSF(proveedorActualCSF);
+            input.value = '';
         };
-        
-        guardarDatos();
-        alert('Constancia de Situación Fiscal subida exitosamente');
-        gestionarCSF(proveedorActualCSF);
-        input.value = '';
-    };
+        reader.readAsDataURL(file);
+    }
     
-    reader.readAsDataURL(file);
+    mostrarCargando(false);
 }
 
 function descargarCSF(proveedorId) {
@@ -1615,14 +2269,16 @@ function descargarCSF(proveedorId) {
     link.click();
 }
 
-function eliminarCSF(proveedorId) {
+async function eliminarCSF(proveedorId) {
     if (!confirm('¿Está seguro de eliminar la Constancia de Situación Fiscal?')) return;
     
     const proveedor = beneficiarios.find(p => p.id === proveedorId);
     if (!proveedor) return;
     
     proveedor.csf = null;
-    guardarDatos();
+    
+    await guardarBeneficiarioSupabase(proveedor);
+    await cargarDatosDesdeSupabase();
     gestionarCSF(proveedorId);
     alert('CSF eliminada exitosamente');
 }
@@ -1642,8 +2298,8 @@ function cargarEmpresas() {
     empresas.forEach(empresa => {
         const row = tbody.insertRow();
         row.innerHTML = `
-            <td>${empresa.razonSocial}</td>
-            <td>${empresa.rfc}</td>
+            <td>${empresa.razonSocial || empresa.razon_social || 'N/A'}</td>
+            <td>${empresa.rfc || 'N/A'}</td>
             <td>
                 <button class="btn btn-secondary" onclick="editarEmpresa(${empresa.id})" style="padding: 5px 10px; font-size: 12px;">Editar</button>
                 <button class="btn btn-danger" onclick="eliminarEmpresa(${empresa.id})" style="padding: 5px 10px; font-size: 12px;">Eliminar</button>
@@ -1680,43 +2336,55 @@ function editarEmpresa(id) {
     mostrarFormularioEmpresa(id);
 }
 
-function eliminarEmpresa(id) {
+async function eliminarEmpresa(id) {
     if (confirm('¿Está seguro de eliminar esta empresa?')) {
-        const index = empresas.findIndex(e => e.id === id);
-        if (index > -1) {
-            empresas.splice(index, 1);
+        try {
+            await eliminarEmpresaSupabase(id);
+            const index = empresas.findIndex(e => e.id === id);
+            if (index > -1) {
+                empresas.splice(index, 1);
+            }
+            await cargarDatosDesdeSupabase();
             cargarEmpresas();
             cargarEmpresasSelect();
             alert('Empresa eliminada exitosamente');
+        } catch (error) {
+            alert('Error al eliminar empresa');
         }
     }
 }
 
-function guardarEmpresa(event) {
+async function guardarEmpresa(event) {
     event.preventDefault();
     
     const razonSocial = document.getElementById('empresaRazon').value;
     const rfc = document.getElementById('empresaRFC').value.toUpperCase();
     
-    if (editandoEmpresa) {
-        const empresa = empresas.find(e => e.id === editandoEmpresa);
-        if (empresa) {
-            empresa.razonSocial = razonSocial;
-            empresa.rfc = rfc;
+    try {
+        if (editandoEmpresa) {
+            const empresa = empresas.find(e => e.id === editandoEmpresa);
+            if (empresa) {
+                empresa.razonSocial = razonSocial;
+                empresa.rfc = rfc;
+                await guardarEmpresaSupabase(empresa);
+            }
+        } else {
+            const nuevaEmpresa = {
+                razonSocial: razonSocial,
+                rfc: rfc
+            };
+            const empresaGuardada = await guardarEmpresaSupabase(nuevaEmpresa);
+            empresas.push(empresaGuardada);
         }
-    } else {
-        const nuevoId = empresas.length > 0 ? Math.max(...empresas.map(e => e.id)) + 1 : 1;
-        empresas.push({
-            id: nuevoId,
-            razonSocial: razonSocial,
-            rfc: rfc
-        });
+        
+        cerrarModalEmpresa();
+        await cargarDatosDesdeSupabase();
+        cargarEmpresas();
+        cargarEmpresasSelect();
+        alert(editandoEmpresa ? 'Empresa actualizada exitosamente' : 'Empresa creada exitosamente');
+    } catch (error) {
+        alert('Error al guardar empresa');
     }
-    
-    cerrarModalEmpresa();
-    cargarEmpresas();
-    cargarEmpresasSelect();
-    alert(editandoEmpresa ? 'Empresa actualizada exitosamente' : 'Empresa creada exitosamente');
 }
 
 function cerrarModalEmpresa() {
@@ -1733,91 +2401,12 @@ window.onclick = function(event) {
     }
 }
 
-function crearSolicitud(event) {
-    event.preventDefault();
-    
-    const beneficiarioId = document.getElementById('beneficiario').value;
-    const empresaId = document.getElementById('empresa').value;
-    const sucursal = document.getElementById('sucursal').value;
-    const numeroAutomatico = document.getElementById('numeroAutomatico').checked;
-    
-    if (!beneficiarioId) {
-        alert('Por favor seleccione un beneficiario');
+async function guardarDatos() {
+    if (usarSupabase) {
+        // Los datos ya se guardan individualmente en Supabase
         return;
     }
-    
-    if (!empresaId) {
-        alert('Por favor seleccione una empresa');
-        return;
-    }
-    
-    let numeroConsecutivo;
-    
-    if (numeroAutomatico) {
-        numeroConsecutivo = contadores[sucursal] + 1;
-    } else {
-        numeroConsecutivo = parseInt(document.getElementById('numeroConsecutivo').value);
-        if (!numeroConsecutivo || numeroConsecutivo < 1) {
-            alert('Por favor ingrese un número consecutivo válido');
-            return;
-        }
-    }
-    
-    const numero = generarNumeroConsecutivo(sucursal, numeroConsecutivo);
-    
-    const solicitudesVinculadasSelect = document.getElementById('solicitudVinculada');
-    const solicitudesVinculadas = Array.from(solicitudesVinculadasSelect.selectedOptions)
-        .map(option => option.value)
-        .filter(val => val !== '');
-    
-    const porcentajeImpuestos = parseFloat(document.getElementById('impuestos').value) || 0;
-    const montoImpuestos = extraerValorMoneda(document.getElementById('montoImpuestos').value);
-    
-    const solicitud = {
-        id: Date.now(),
-        numero: numero,
-        numeroConsecutivo: numeroConsecutivo,
-        sucursal: sucursal,
-        empresaId: parseInt(empresaId),
-        beneficiarioId: parseInt(beneficiarioId),
-        proveedor: document.getElementById('proveedor').value,
-        conceptoGeneral: document.getElementById('conceptoGeneral').value,
-        montoConceptoGeneral: extraerValorMoneda(document.getElementById('montoConceptoGeneral').value),
-        conceptoPago: document.getElementById('conceptoPago').value,
-        claveAnuncio: document.getElementById('claveAnuncio').value || '',
-        subtotal: extraerValorMoneda(document.getElementById('subtotal').value),
-        descuento: extraerValorMoneda(document.getElementById('descuento').value),
-        porcentajeImpuestos: porcentajeImpuestos,
-        impuestos: montoImpuestos,
-        total: extraerValorMoneda(document.getElementById('total').value),
-        banco: document.getElementById('banco').value,
-        cuenta: document.getElementById('cuenta').value,
-        clabe: document.getElementById('clabe').value,
-        ciudad: document.getElementById('ciudad').value,
-        estado: 'pendiente',
-        fechaSolicitud: new Date().toISOString(),
-        fechaAutorizacion: null,
-        solicitudesVinculadas: solicitudesVinculadas,
-        archivos: []
-    };
-    
-    solicitudes.push(solicitud);
-    
-    if (numeroConsecutivo > contadores[sucursal]) {
-        contadores[sucursal] = numeroConsecutivo;
-    }
-    
-    alert('Solicitud creada exitosamente con número: ' + numero);
-    limpiarFormulario();
-    switchTab('solicitudes');
-}
-
-function guardarDatos() {
-    localStorage.setItem('solicitudes', JSON.stringify(solicitudes));
-    localStorage.setItem('contadores', JSON.stringify(contadores));
-    localStorage.setItem('beneficiarios', JSON.stringify(beneficiarios));
-    localStorage.setItem('empresas', JSON.stringify(empresas));
-    guardarUsuariosEnStorage();
+    guardarDatosLocalStorage();
 }
 
 function cargarDatos() {
@@ -1860,10 +2449,445 @@ function cargarDatos() {
     cargarUsuariosDesdeStorage();
 }
 
-cargarDatos();
+//cargarDatos();
 
-window.addEventListener('beforeunload', function() {
-    guardarDatos();
-});
+//window.addEventListener('beforeunload', function() {
+//    guardarDatos();
+//});
 
-setInterval(guardarDatos, 30000);
+//setInterval(guardarDatos, 30000);
+
+async function marcarComoPagada(solicitudId, estaPagada) {
+    const solicitud = solicitudes.find(s => s.id === solicitudId);
+    if (solicitud) {
+        solicitud.pagada = estaPagada;
+        if (estaPagada) {
+            solicitud.fechaPago = new Date().toISOString();
+        } else {
+            solicitud.fechaPago = null;
+        }
+        
+        await actualizarSolicitudSupabase(solicitud);
+        await cargarDatosDesdeSupabase();
+        cargarSolicitudes();
+    }
+}
+
+function gestionarComprobantePago(solicitudId) {
+    const solicitud = solicitudes.find(s => s.id === solicitudId);
+    if (!solicitud) return;
+    
+    const modal = document.getElementById('comprobantePagoModal');
+    const info = document.getElementById('comprobanteSolicitudInfo');
+    const contenido = document.getElementById('comprobanteContenido');
+    
+    info.innerHTML = `
+        <p><strong>Solicitud:</strong> ${solicitud.numero}</p>
+        <p><strong>Proveedor:</strong> ${solicitud.proveedor}</p>
+        <p><strong>Total:</strong> $${solicitud.total.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
+    `;
+    
+    // Guardar ID actual
+    modal.setAttribute('data-solicitud-id', solicitudId);
+    
+    if (solicitud.comprobantePago) {
+        const esImagen = solicitud.comprobantePago.tipo.startsWith('image/');
+        const esPDF = solicitud.comprobantePago.tipo === 'application/pdf';
+        
+        let htmlVisualizacion = '';
+        if (esImagen) {
+            htmlVisualizacion = `
+                <div style="text-align: center; margin: 10px 0;">
+                    <img src="${solicitud.comprobantePago.datos}" 
+                         style="max-width: 100%; max-height: 400px; border: 1px solid #ddd;">
+                </div>
+            `;
+        } else if (esPDF) {
+            htmlVisualizacion = `
+                <div style="text-align: center; margin: 10px 0;">
+                    <p style="font-size: 14px;">📄 Archivo PDF: ${solicitud.comprobantePago.nombre}</p>
+                </div>
+            `;
+        }
+        
+        contenido.innerHTML = `
+            <h4>Comprobante Actual:</h4>
+            <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                <p><strong>Archivo:</strong> ${solicitud.comprobantePago.nombre}</p>
+                <p><strong>Fecha de subida:</strong> ${formatearFecha(solicitud.comprobantePago.fecha)}</p>
+                ${htmlVisualizacion}
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="btn btn-secondary" onclick="descargarComprobantePago(${solicitudId})" style="flex: 1;">
+                        Descargar
+                    </button>
+                    <button class="btn btn-danger" onclick="eliminarComprobantePago(${solicitudId})" style="flex: 1;">
+                        Eliminar
+                    </button>
+                </div>
+            </div>
+        `;
+    } else {
+        contenido.innerHTML = `
+            <p style="color: #999; text-align: center; padding: 20px;">
+                No hay comprobante de pago cargado
+            </p>
+        `;
+    }
+    
+    modal.style.display = 'block';
+}
+
+async function subirComprobantePago() {
+    const input = document.getElementById('archivoComprobante');
+    const file = input.files[0];
+    
+    if (!file) {
+        alert('Por favor seleccione un archivo');
+        return;
+    }
+    
+    const tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf'];
+    if (!tiposPermitidos.includes(file.type)) {
+        alert('Solo se permiten archivos PDF o imágenes (JPG, PNG, GIF)');
+        return;
+    }
+    
+    const maxSize = 2 * 1024 * 1024;
+    if (file.size > maxSize) {
+        alert('El archivo es demasiado grande. Tamaño máximo: 2 MB');
+        return;
+    }
+    
+    const modal = document.getElementById('comprobantePagoModal');
+    const solicitudId = parseInt(modal.getAttribute('data-solicitud-id'));
+    const solicitud = solicitudes.find(s => s.id === solicitudId);
+    
+    if (!solicitud) return;
+    
+    mostrarCargando(true);
+    
+    if (usarSupabase) {
+        const url = await subirArchivoSupabase(file, 'comprobantes');
+        if (url) {
+            solicitud.comprobantePago = {
+                nombre: file.name,
+                tipo: file.type,
+                datos: url,
+                fecha: new Date().toISOString()
+            };
+            
+            await actualizarSolicitudSupabase(solicitud);
+            await cargarDatosDesdeSupabase();
+            alert('Comprobante de pago subido exitosamente');
+            gestionarComprobantePago(solicitudId);
+            cargarSolicitudes();
+            input.value = '';
+        } else {
+            alert('Error al subir el archivo');
+        }
+    } else {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            solicitud.comprobantePago = {
+                nombre: file.name,
+                tipo: file.type,
+                datos: e.target.result,
+                fecha: new Date().toISOString()
+            };
+            
+            guardarDatosLocalStorage();
+            alert('Comprobante de pago subido exitosamente');
+            gestionarComprobantePago(solicitudId);
+                        cargarSolicitudes();
+            input.value = '';
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    mostrarCargando(false);
+}
+
+function descargarComprobantePago(solicitudId) {
+    const solicitud = solicitudes.find(s => s.id === solicitudId);
+    if (!solicitud || !solicitud.comprobantePago) return;
+    
+    const link = document.createElement('a');
+    link.href = solicitud.comprobantePago.datos;
+    link.download = solicitud.comprobantePago.nombre;
+    link.click();
+}
+
+async function eliminarComprobantePago(solicitudId) {
+    if (!confirm('¿Está seguro de eliminar el comprobante de pago?')) return;
+    
+    const solicitud = solicitudes.find(s => s.id === solicitudId);
+    if (!solicitud) return;
+    
+    solicitud.comprobantePago = null;
+    
+    await actualizarSolicitudSupabase(solicitud);
+    await cargarDatosDesdeSupabase();
+    alert('Comprobante eliminado exitosamente');
+    gestionarComprobantePago(solicitudId);
+    cargarSolicitudes();
+}
+
+function cerrarModalComprobante() {
+    const modal = document.getElementById('comprobantePagoModal');
+    modal.style.display = 'none';
+    modal.removeAttribute('data-solicitud-id');
+    document.getElementById('archivoComprobante').value = '';
+}
+
+// Verificar si el usuario tiene un permiso específico
+function tienePermiso(permiso) {
+    if (!usuarioActual) return false;
+    const rolConfig = rolesConfig[usuarioActual.rol];
+    if (!rolConfig) return false;
+    return rolConfig.permisos.includes(permiso);
+}
+
+// Cargar configuración de roles desde localStorage
+function cargarRolesConfig() {
+    const rolesGuardados = localStorage.getItem('rolesConfig');
+    if (rolesGuardados) {
+        try {
+            const rolesTemp = JSON.parse(rolesGuardados);
+            // Siempre mantener el rol admin con permisos completos
+            rolesTemp['admin'] = rolesConfig['admin'];
+            rolesConfig = rolesTemp;
+        } catch (e) {
+            console.error('Error al cargar roles:', e);
+        }
+    }
+}
+
+// Guardar configuración de roles
+function guardarRolesConfig() {
+    localStorage.setItem('rolesConfig', JSON.stringify(rolesConfig));
+}
+
+// Cargar roles al inicio
+cargarRolesConfig();
+
+// Cargar tabla de roles
+function cargarRoles() {
+    if (!tienePermiso('gestionar_roles')) {
+        alert('No tiene permisos para gestionar roles');
+        return;
+    }
+    
+    const tbody = document.querySelector('#rolesTable tbody');
+    tbody.innerHTML = '';
+    
+    Object.keys(rolesConfig).forEach(codigoRol => {
+        const rol = rolesConfig[codigoRol];
+        const row = tbody.insertRow();
+        
+        const permisosResumen = rol.permisos.length > 3 
+            ? `${rol.permisos.slice(0, 3).map(p => permisosDisponibles[p]?.substring(0, 20)).join(', ')}...` 
+            : rol.permisos.map(p => permisosDisponibles[p]?.substring(0, 30)).join(', ');
+        
+        row.innerHTML = `
+            <td><code>${codigoRol}</code></td>
+            <td>${rol.nombre}</td>
+            <td style="font-size: 11px;">${permisosResumen}<br><small>(${rol.permisos.length} permisos)</small></td>
+            <td>${rol.requiereSucursal ? 'Sí' : 'No'}</td>
+            <td>
+                <button class="btn btn-secondary" onclick="editarRol('${codigoRol}')" 
+                        style="padding: 5px 10px; font-size: 12px;">Ver/Editar</button>
+                ${!rol.editable ? 
+                    '<span style="color: #999; font-size: 11px;">Protegido</span>' :
+                    `<button class="btn btn-danger" onclick="eliminarRol('${codigoRol}')" 
+                            style="padding: 5px 10px; font-size: 12px;">Eliminar</button>`
+                }
+            </td>
+        `;
+    });
+}
+
+// Mostrar formulario de rol
+function mostrarFormularioRol(codigoRol = null) {
+    if (!tienePermiso('gestionar_roles')) {
+        alert('No tiene permisos para gestionar roles');
+        return;
+    }
+    
+    const modal = document.getElementById('rolModal');
+    const title = document.getElementById('rolModalTitle');
+    const form = document.getElementById('rolForm');
+    const permisosContainer = document.getElementById('permisosCheckboxes');
+    
+    form.reset();
+    editandoRol = codigoRol;
+    
+    // Generar checkboxes de permisos
+    permisosContainer.innerHTML = '';
+    Object.keys(permisosDisponibles).forEach(codigoPermiso => {
+        if (codigoPermiso === 'gestionar_roles' && codigoRol !== 'admin') {
+            return; // Solo admin puede tener este permiso
+        }
+        
+        const div = document.createElement('div');
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'permiso';
+        checkbox.value = codigoPermiso;
+        checkbox.id = `permiso_${codigoPermiso}`;
+        
+        const label = document.createElement('label');
+        label.htmlFor = `permiso_${codigoPermiso}`;
+        label.textContent = permisosDisponibles[codigoPermiso];
+        
+        div.appendChild(checkbox);
+        div.appendChild(label);
+        permisosContainer.appendChild(div);
+    });
+    
+    if (codigoRol) {
+        title.textContent = 'Editar Rol';
+        const rol = rolesConfig[codigoRol];
+        
+        document.getElementById('rolCodigo').value = codigoRol;
+        document.getElementById('rolCodigo').readOnly = true;
+        document.getElementById('rolNombre').value = rol.nombre;
+        document.getElementById('rolRequiereSucursal').checked = rol.requiereSucursal;
+        
+        // Marcar permisos
+        rol.permisos.forEach(permiso => {
+            const checkbox = document.querySelector(`input[value="${permiso}"]`);
+            if (checkbox) checkbox.checked = true;
+        });
+        
+        // Si no es editable, deshabilitar campos
+        if (!rol.editable) {
+            document.getElementById('rolCodigo').disabled = true;
+            document.getElementById('rolNombre').disabled = true;
+            document.getElementById('rolRequiereSucursal').disabled = true;
+            document.querySelectorAll('input[name="permiso"]').forEach(cb => cb.disabled = true);
+            form.querySelector('button[type="submit"]').style.display = 'none';
+        }
+    } else {
+        title.textContent = 'Nuevo Rol';
+        document.getElementById('rolCodigo').readOnly = false;
+    }
+    
+    modal.style.display = 'block';
+}
+
+// Editar rol
+function editarRol(codigoRol) {
+    mostrarFormularioRol(codigoRol);
+}
+
+// Guardar rol
+function guardarRol(event) {
+    event.preventDefault();
+    
+    const codigoRol = document.getElementById('rolCodigo').value.trim().toLowerCase();
+    const nombreRol = document.getElementById('rolNombre').value.trim();
+    const requiereSucursal = document.getElementById('rolRequiereSucursal').checked;
+    
+    const permisosSeleccionados = Array.from(document.querySelectorAll('input[name="permiso"]:checked'))
+        .map(cb => cb.value);
+    
+    if (permisosSeleccionados.length === 0) {
+        alert('Debe seleccionar al menos un permiso');
+        return;
+    }
+    
+    if (!editandoRol && rolesConfig[codigoRol]) {
+        alert('Ya existe un rol con ese código');
+        return;
+    }
+    
+    rolesConfig[codigoRol] = {
+        nombre: nombreRol,
+        permisos: permisosSeleccionados,
+        requiereSucursal: requiereSucursal,
+        editable: true
+    };
+    
+    guardarRolesConfig();
+    cerrarModalRol();
+    cargarRoles();
+    alert(editandoRol ? 'Rol actualizado exitosamente' : 'Rol creado exitosamente');
+}
+
+// Eliminar rol
+function eliminarRol(codigoRol) {
+    if (!rolesConfig[codigoRol].editable) {
+        alert('Este rol está protegido y no puede ser eliminado');
+        return;
+    }
+    
+    // Verificar si hay usuarios con este rol
+    const usuariosConRol = Object.keys(usuarios).filter(username => usuarios[username].rol === codigoRol);
+    if (usuariosConRol.length > 0) {
+        alert(`No se puede eliminar este rol porque hay ${usuariosConRol.length} usuario(s) asignado(s) a él. Primero cambie o elimine esos usuarios.`);
+        return;
+    }
+    
+    if (confirm(`¿Está seguro de eliminar el rol "${rolesConfig[codigoRol].nombre}"?`)) {
+        delete rolesConfig[codigoRol];
+        guardarRolesConfig();
+        cargarRoles();
+        alert('Rol eliminado exitosamente');
+    }
+}
+
+// Cerrar modal de rol
+function cerrarModalRol() {
+    document.getElementById('rolModal').style.display = 'none';
+    editandoRol = null;
+    
+    // Rehabilitar campos
+    document.getElementById('rolCodigo').disabled = false;
+    document.getElementById('rolNombre').disabled = false;
+    document.getElementById('rolRequiereSucursal').disabled = false;
+    document.querySelectorAll('input[name="permiso"]').forEach(cb => cb.disabled = false);
+    document.getElementById('rolForm').querySelector('button[type="submit"]').style.display = 'inline-block';
+}
+
+// Función para formatear fechas a dd/mm/yyyy
+function formatearFecha(fecha) {
+    if (!fecha) return '';
+    const date = new Date(fecha);
+    const dia = String(date.getDate()).padStart(2, '0');
+    const mes = String(date.getMonth() + 1).padStart(2, '0');
+    const año = date.getFullYear();
+    return `${dia}/${mes}/${año}`;
+}
+
+function calcularTotal() {
+    const subtotalInput = document.getElementById('subtotal');
+    const impuestosInput = document.getElementById('impuestos');
+    const montoImpuestosInput = document.getElementById('montoImpuestos');
+    const totalInput = document.getElementById('total');
+    
+    const subtotal = extraerValorMoneda(subtotalInput.value);
+    const porcentajeImpuestos = parseFloat(impuestosInput.value) || 0;
+    
+    const montoImpuestos = subtotal * (porcentajeImpuestos / 100);
+    const total = subtotal + montoImpuestos;
+    
+    montoImpuestosInput.value = '$' + montoImpuestos.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    totalInput.value = '$' + total.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function calcularMontoConceptoPago() {
+    const montoTotalInput = document.getElementById('montoConceptoGeneral');
+    const porcentajeAnticipoInput = document.getElementById('porcentajeAnticipo');
+    const subtotalInput = document.getElementById('subtotal');
+    
+    const montoTotal = extraerValorMoneda(montoTotalInput.value);
+    const porcentajeAnticipo = parseFloat(porcentajeAnticipoInput.value) || 0;
+    
+    const montoConceptoPago = montoTotal * (porcentajeAnticipo / 100);
+    
+    subtotalInput.value = '$' + montoConceptoPago.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    
+    // Recalcular el total
+    calcularTotal();
+}
