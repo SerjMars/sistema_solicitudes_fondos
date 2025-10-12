@@ -88,6 +88,7 @@ let beneficiarios = [
         nombre: 'ESPECTACULARES, S.A. DE C.V.',
         razonSocial: 'ESPECTACULARES SOCIEDAD ANONIMA DE CAPITAL VARIABLE',
         rfc: 'ESP123456789',
+        tipo: 'proveedor',
         banco: 'BBVA',
         cuenta: '01-20-32-02-50',
         clabe: '01279000120320250',
@@ -128,6 +129,15 @@ let solicitudActualArchivos = null;
 let usuarioActual = null;
 
 let editandoRol = null;
+
+let archivosTemporales = [];
+
+let contadorFilasGastos = 0;
+let gastosTemporales = [];
+
+// Variables para almacenar archivos
+let archivosPDFGastos = {};
+let archivosXMLGastos = {};
 
 document.addEventListener('DOMContentLoaded', async function() {
     await cargarDatosDesdeSupabase();
@@ -185,6 +195,7 @@ function mostrarAplicacion() {
     configurarInterfazPorRol();
     ocultarPestañasSegunPermisos();
     cargarBeneficiariosSelect();
+    cargarBeneficiariosSelectCajaChica();
     cargarEmpresasSelect();
     cargarSolicitudesVinculadas();
 }
@@ -223,9 +234,14 @@ function configurarInterfazPorRol() {
     const sucursalSelect = document.getElementById('sucursal');
     
     if (usuarioActual.rol === 'jefe' && usuarioActual.sucursal) {
-        sucursalSelect.innerHTML = `<option value="${usuarioActual.sucursal}">${getSucursalName(usuarioActual.sucursal)}</option>`;
         sucursalSelect.value = usuarioActual.sucursal;
         sucursalSelect.disabled = true;
+        sucursalSelect.style.background = '#f8f9fa';
+        sucursalSelect.style.cursor = 'not-allowed';
+    } else {
+        sucursalSelect.disabled = false;
+        sucursalSelect.style.background = 'white';
+        sucursalSelect.style.cursor = 'pointer';
     }
 }
 
@@ -338,7 +354,7 @@ function getSucursalName(code) {
     return nombres[code] || code;
 }
 
-function switchTab(tabName) {
+function switchTab(tabName, event) {
     // Verificar permisos para ciertas pestañas
     if (tabName === 'usuarios' && !tienePermiso('gestionar_usuarios')) {
         alert('No tiene permisos para acceder a esta sección');
@@ -357,12 +373,32 @@ function switchTab(tabName) {
         return;
     }
     
+    // Remover active de todas las pestañas y contenidos
     document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
     
-    event.target.classList.add('active');
-    document.getElementById(tabName + 'Tab').classList.add('active');
+    // Agregar active a la pestaña clickeada (si hay evento)
+    if (event && event.target) {
+        event.target.classList.add('active');
+    } else {
+        // Si no hay evento, buscar la pestaña por el texto
+        const tabs = document.querySelectorAll('.nav-tab');
+        tabs.forEach(tab => {
+            const tabText = tab.textContent.toLowerCase();
+            if (tabText.includes(tabName.toLowerCase()) || 
+                (tabName === 'nueva' && tabText.includes('nueva solicitud'))) {
+                tab.classList.add('active');
+            }
+        });
+    }
     
+    // Mostrar el contenido de la pestaña
+    const tabContent = document.getElementById(tabName + 'Tab');
+    if (tabContent) {
+        tabContent.classList.add('active');
+    }
+    
+    // Cargar datos según la pestaña
     if (tabName === 'solicitudes') {
         cargarSolicitudes();
     } else if (tabName === 'usuarios') {
@@ -656,68 +692,900 @@ function generarNumeroConsecutivo(sucursal, numeroIngresado) {
     return `${sucursal}-${numeroFormateado}-${año}`;
 }
 
-async function crearSolicitud(event) {
-    event.preventDefault();
+// Manejar selección de archivos en nueva solicitud
+document.addEventListener('DOMContentLoaded', function() {
+    const inputArchivos = document.getElementById('archivosNuevaSolicitud');
+    if (inputArchivos) {
+        inputArchivos.addEventListener('change', function() {
+            mostrarArchivosTemporales();
+        });
+    }
+});
+
+function mostrarArchivosTemporales() {
+    const input = document.getElementById('archivosNuevaSolicitud');
+    const lista = document.getElementById('listaArchivosNuevaSolicitud');
     
-    const form = document.getElementById('solicitudForm');
-    const editingId = form.getAttribute('data-editing-id');
-    const isEditing = editingId !== null;
-    
-    const beneficiarioId = document.getElementById('beneficiario').value;
-    const empresaId = document.getElementById('empresa').value;
-    const sucursal = document.getElementById('sucursal').value;
-    
-    if (!beneficiarioId) {
-        alert('Por favor seleccione un beneficiario');
+    if (!input.files || input.files.length === 0) {
+        lista.innerHTML = '';
         return;
     }
     
-    if (!empresaId) {
+    let html = '<h5 style="font-size: 14px; margin-bottom: 10px;">Archivos seleccionados:</h5>';
+    
+    Array.from(input.files).forEach((file, index) => {
+        html += `
+            <div class="archivo-item" style="padding: 10px; background: white; margin: 8px 0; border-radius: 5px; border: 1px solid #ddd;">
+                <span style="font-size: 13px;">${file.name} <small style="color: #999;">(${(file.size / 1024).toFixed(2)} KB)</small></span>
+            </div>
+        `;
+    });
+    
+    lista.innerHTML = html;
+}
+
+async function procesarArchivosNuevaSolicitud() {
+    const input = document.getElementById('archivosNuevaSolicitud');
+    const archivos = [];
+    
+    if (!input.files || input.files.length === 0) {
+        return archivos;
+    }
+    
+    for (let file of input.files) {
+        const reader = new FileReader();
+        const archivoPromise = new Promise((resolve) => {
+            reader.onload = function(e) {
+                resolve({
+                    nombre: file.name,
+                    tipo: file.type,
+                    datos: e.target.result,
+                    fecha: new Date().toISOString()
+                });
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        archivos.push(await archivoPromise);
+    }
+    
+    return archivos;
+}
+
+// Función auxiliar para establecer required de forma segura
+function setRequired(elementId, isRequired) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.required = isRequired;
+    } else {
+        console.warn(`Elemento '${elementId}' no encontrado en el DOM`);
+    }
+}
+
+// Cambiar entre formatos
+function cambiarFormato(formato) {
+    const tipoFormato = document.getElementById('tipoFormato');
+    const formatoNormal = document.getElementById('formatoNormal');
+    const formatoCajaChica = document.getElementById('formatoCajaChica');
+    const btnNormal = document.getElementById('btnFormatoNormal');
+    const btnCajaChica = document.getElementById('btnFormatoCajaChica');
+    const vincularGroup = document.getElementById('vincularSolicitudGroup');
+    const claveAnuncioGroup = document.getElementById('claveAnuncio').closest('.form-group');
+    
+    if (formato === 'normal') {
+        tipoFormato.value = 'normal';
+        formatoNormal.style.display = 'block';
+        formatoCajaChica.style.display = 'none';
+        vincularGroup.style.display = 'block';
+        claveAnuncioGroup.style.display = 'block';
+        btnNormal.classList.add('active');
+        btnCajaChica.classList.remove('active');
+        
+        // Hacer campos requeridos para formato normal
+        setRequired('conceptoGeneral', true);
+        setRequired('montoConceptoGeneral', true);
+        setRequired('subtotal', true);
+        setRequired('total', true);
+        setRequired('beneficiario', true);
+        setRequired('proveedor', true);
+        setRequired('banco', true);
+        setRequired('cuenta', true);
+        setRequired('clabe', true);
+        // NO incluir 'ciudad' porque ya no existe
+        
+        // Quitar requerimiento de caja chica
+        setRequired('beneficiarioCajaChica', false);
+        setRequired('proveedorCajaChica', false);
+        setRequired('bancoCajaChica', false);
+        setRequired('cuentaCajaChica', false);
+        setRequired('clabeCajaChica', false);
+        // NO incluir 'ciudadCajaChica' porque ya no existe
+        
+    } else {
+        tipoFormato.value = 'cajaChica';
+        formatoNormal.style.display = 'none';
+        formatoCajaChica.style.display = 'block';
+        vincularGroup.style.display = 'none';
+        claveAnuncioGroup.style.display = 'none';
+        btnNormal.classList.remove('active');
+        btnCajaChica.classList.add('active');
+        
+        // Quitar requerimiento de formato normal
+        setRequired('conceptoGeneral', false);
+        setRequired('montoConceptoGeneral', false);
+        setRequired('subtotal', false);
+        setRequired('total', false);
+        setRequired('beneficiario', false);
+        setRequired('proveedor', false);
+        setRequired('banco', false);
+        setRequired('cuenta', false);
+        setRequired('clabe', false);
+        // NO incluir 'ciudad' porque ya no existe
+        
+        // Hacer campos requeridos para caja chica
+        setRequired('beneficiarioCajaChica', true);
+        setRequired('proveedorCajaChica', true);
+        setRequired('bancoCajaChica', true);
+        setRequired('cuentaCajaChica', true);
+        setRequired('clabeCajaChica', true);
+        // NO incluir 'ciudadCajaChica' porque ya no existe
+        
+        // ===== LIMPIAR Y RESETEAR GASTOS =====
+        const tbody = document.getElementById('bodyGastos');
+        if (tbody) {
+            // Limpiar todas las filas existentes
+            tbody.innerHTML = '';
+        }
+        
+        // Resetear contadores y archivos
+        contadorFilasGastos = 0;
+        archivosPDFGastos = {};
+        archivosXMLGastos = {};
+        
+        // Resetear total
+        const totalReembolsar = document.getElementById('totalReembolsar');
+        if (totalReembolsar) {
+            totalReembolsar.textContent = '$0.00';
+        }
+        
+        // Agregar UNA sola fila inicial
+        agregarFilaGasto();
+    }
+}
+
+// Agregar fila de gasto con archivos
+function agregarFilaGasto() {
+
+    console.log(`Agregando fila de gasto. Contador actual: ${contadorFilasGastos} -> ${contadorFilasGastos + 1}`);
+
+    const tbody = document.getElementById('bodyGastos');
+    const fila = tbody.insertRow();
+    const id = ++contadorFilasGastos;
+    
+    fila.innerHTML = `
+        <td>
+            <input type="date" id="fecha_${id}" class="gasto-campo" required 
+                   value="${new Date().toISOString().split('T')[0]}">
+        </td>
+        <td>
+            <input type="text" id="factura_${id}" class="gasto-campo" placeholder="Núm. factura" required>
+        </td>
+        <td>
+            <input type="text" id="descripcion_${id}" class="gasto-campo" placeholder="Descripción del gasto" required>
+        </td>
+        <td>
+            <div class="autocomplete-container">
+                <input type="text" id="proveedor_${id}" class="gasto-campo" 
+                       placeholder="Nombre del proveedor" required
+                       oninput="mostrarAutocomplete(${id})"
+                       onfocus="mostrarAutocomplete(${id})"
+                       onblur="setTimeout(() => ocultarAutocomplete(${id}), 200)">
+                <div id="autocomplete_${id}" class="autocomplete-list"></div>
+            </div>
+        </td>
+        <td>
+            <input type="text" id="monto_${id}" class="gasto-campo" placeholder="$0.00" required
+                oninput="formatearMoneda(this)" 
+                onblur="formatearMonedaCompleto(this); calcularTotalReembolso()"
+                onkeyup="calcularTotalReembolso()">
+        </td>
+        <td>
+            <input type="file" id="archivoPDF_${id}" accept=".pdf,.jpg,.jpeg,.png" 
+                   onchange="manejarArchivoPDF(${id})" 
+                   style="display: none;">
+            <button type="button" id="btnSubirPDF_${id}" class="btn btn-secondary" 
+                    onclick="document.getElementById('archivoPDF_${id}').click()"
+                    style="padding: 4px 8px; font-size: 11px; width: 100%;">
+                Subir
+            </button>
+            <div id="statusPDF_${id}" class="archivo-status pendiente" style="display: block;">
+                Sin archivo
+            </div>
+        </td>
+        <td>
+            <input type="file" id="archivoXML_${id}" accept=".xml" 
+                   onchange="manejarArchivoXML(${id})" 
+                   style="display: none;">
+            <button type="button" id="btnSubirXML_${id}" class="btn btn-secondary" 
+                    onclick="document.getElementById('archivoXML_${id}').click()"
+                    style="padding: 4px 8px; font-size: 11px; width: 100%;">
+                XML
+            </button>
+            <div id="statusXML_${id}" class="archivo-status pendiente" style="display: block;">
+                Opcional
+            </div>
+        </td>
+        <td style="text-align: center;">
+            <input type="checkbox" id="autorizado_${id}" class="checkbox-autorizado" checked 
+                   onchange="calcularTotalReembolso()">
+        </td>
+        <td style="text-align: center;">
+            <button type="button" class="btn btn-danger" onclick="eliminarFilaGasto(this)" 
+                    style="padding: 5px 10px; font-size: 12px;">✕</button>
+        </td>
+    `;
+}
+
+// Manejar archivo PDF/Imagen
+function manejarArchivoPDF(id) {
+    const input = document.getElementById(`archivoPDF_${id}`);
+    const status = document.getElementById(`statusPDF_${id}`);
+    const btnSubir = document.getElementById(`btnSubirPDF_${id}`);
+    const file = input.files[0];
+    
+    if (!file) return;
+    
+    // Validar tamaño (máximo 5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+        alert('El archivo es demasiado grande. Tamaño máximo: 5 MB');
+        input.value = '';
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        archivosPDFGastos[id] = {
+            nombre: file.name,
+            tipo: file.type,
+            datos: e.target.result
+        };
+        
+        // Actualizar botón
+        if (btnSubir) {
+            btnSubir.style.background = '#28a745';
+            btnSubir.textContent = '✓ Cargado';
+        }
+        
+        status.textContent = file.name;
+        status.className = 'archivo-status cargado';
+        status.style.display = 'block';
+        
+        // Resto del código de botones...
+        const botonesAnteriores = status.parentNode.querySelectorAll('.btn-accion-archivo');
+        botonesAnteriores.forEach(btn => btn.remove());
+        
+        const containerBotones = document.createElement('div');
+        containerBotones.style.display = 'flex';
+        containerBotones.style.gap = '4px';
+        containerBotones.style.marginTop = '4px';
+        
+        const btnVer = document.createElement('button');
+        btnVer.type = 'button';
+        btnVer.className = 'btn-accion-archivo';
+        btnVer.textContent = '👁';
+        btnVer.title = 'Ver archivo';
+        btnVer.onclick = () => verArchivoGasto(id, 'pdf');
+        
+        const btnEliminar = document.createElement('button');
+        btnEliminar.type = 'button';
+        btnEliminar.className = 'btn-accion-archivo btn-eliminar';
+        btnEliminar.textContent = '🗑';
+        btnEliminar.title = 'Eliminar archivo';
+        btnEliminar.onclick = () => eliminarArchivoPDFGasto(id);
+        
+        containerBotones.appendChild(btnVer);
+        containerBotones.appendChild(btnEliminar);
+        status.parentNode.appendChild(containerBotones);
+    };
+    reader.readAsDataURL(file);
+}
+
+// Manejar archivo XML
+function manejarArchivoXML(id) {
+    const input = document.getElementById(`archivoXML_${id}`);
+    const status = document.getElementById(`statusXML_${id}`);
+    const file = input.files[0];
+    
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        archivosXMLGastos[id] = {
+            nombre: file.name,
+            tipo: file.type,
+            datos: e.target.result
+        };
+        
+        status.textContent = file.name;
+        status.className = 'archivo-status cargado';
+        status.style.display = 'block';
+        
+        // Limpiar botones anteriores si existen
+        const botonesAnteriores = status.parentNode.querySelectorAll('.btn-accion-archivo');
+        botonesAnteriores.forEach(btn => btn.remove());
+        
+        // Contenedor de botones
+        const containerBotones = document.createElement('div');
+        containerBotones.style.display = 'flex';
+        containerBotones.style.gap = '4px';
+        containerBotones.style.marginTop = '4px';
+        
+        // Botón Descargar
+        const btnDescargar = document.createElement('button');
+        btnDescargar.type = 'button';
+        btnDescargar.className = 'btn-accion-archivo';
+        btnDescargar.textContent = '⬇';
+        btnDescargar.title = 'Descargar archivo';
+        btnDescargar.onclick = () => descargarArchivoGasto(id, 'xml');
+        
+        // Botón Eliminar
+        const btnEliminar = document.createElement('button');
+        btnEliminar.type = 'button';
+        btnEliminar.className = 'btn-accion-archivo btn-eliminar';
+        btnEliminar.textContent = '🗑';
+        btnEliminar.title = 'Eliminar archivo';
+        btnEliminar.onclick = () => eliminarArchivoXMLGasto(id);
+        
+        containerBotones.appendChild(btnDescargar);
+        containerBotones.appendChild(btnEliminar);
+        status.parentNode.appendChild(containerBotones);
+    };
+    reader.readAsDataURL(file);
+}
+
+// Ver archivo de gasto
+function verArchivoGasto(id, tipo) {
+    const archivo = tipo === 'pdf' ? archivosPDFGastos[id] : archivosXMLGastos[id];
+    if (!archivo) return;
+    
+    const ventana = window.open('', '_blank');
+    if (archivo.tipo === 'application/pdf') {
+        ventana.document.write(`
+            <html>
+            <head><title>${archivo.nombre}</title></head>
+            <body style="margin:0;">
+                <iframe src="${archivo.datos}" style="width:100%;height:100vh;border:none;"></iframe>
+            </body>
+            </html>
+        `);
+    } else {
+        ventana.document.write(`
+            <html>
+            <head><title>${archivo.nombre}</title></head>
+            <body style="margin:0;display:flex;justify-content:center;align-items:center;background:#000;">
+                <img src="${archivo.datos}" style="max-width:100%;max-height:100vh;">
+            </body>
+            </html>
+        `);
+    }
+}
+
+// Eliminar archivo PDF de un gasto
+function eliminarArchivoPDFGasto(id) {
+    if (!confirm('¿Está seguro de eliminar este archivo PDF/Imagen?')) return;
+    
+    // Eliminar del objeto
+    delete archivosPDFGastos[id];
+    
+    // Limpiar input file
+    const input = document.getElementById(`archivoPDF_${id}`);
+    input.value = '';
+    
+    // Resetear botón
+    const btnSubir = document.getElementById(`btnSubirPDF_${id}`);
+    if (btnSubir) {
+        btnSubir.style.background = '';
+        btnSubir.textContent = 'Subir';
+    }
+    
+    // Resetear status
+    const status = document.getElementById(`statusPDF_${id}`);
+    status.textContent = 'Sin archivo';
+    status.className = 'archivo-status pendiente';
+    status.style.display = 'block';
+    
+    // Eliminar botones
+    const botones = status.parentNode.querySelectorAll('.btn-accion-archivo');
+    botones.forEach(btn => btn.remove());
+}
+
+// Eliminar archivo XML de un gasto
+function eliminarArchivoXMLGasto(id) {
+    if (!confirm('¿Está seguro de eliminar este archivo XML?')) return;
+    
+    // Eliminar del objeto
+    delete archivosXMLGastos[id];
+    
+    // Limpiar input file
+    const input = document.getElementById(`archivoXML_${id}`);
+    input.value = '';
+    
+    // Resetear status
+    const status = document.getElementById(`statusXML_${id}`);
+    status.textContent = 'Opcional';
+    status.className = 'archivo-status pendiente';
+    status.style.display = 'block';
+    
+    // Eliminar botones
+    const botones = status.parentNode.querySelectorAll('.btn-accion-archivo');
+    botones.forEach(btn => btn.remove());
+}
+
+// Descargar archivo de gasto
+function descargarArchivoGasto(id, tipo) {
+    const archivo = tipo === 'xml' ? archivosXMLGastos[id] : archivosPDFGastos[id];
+    if (!archivo) return;
+    
+    const link = document.createElement('a');
+    link.href = archivo.datos;
+    link.download = archivo.nombre;
+    link.click();
+}
+
+// Eliminar fila de gasto
+function eliminarFilaGasto(btn) {
+    const tbody = document.getElementById('bodyGastos');
+    const totalFilas = tbody.querySelectorAll('tr').length;
+    
+    // No permitir eliminar si solo hay una fila
+    if (totalFilas === 1) {
+        alert('Debe mantener al menos un gasto. Si desea eliminarlo, limpie los campos.');
+        return;
+    }
+    
+    const fila = btn.closest('tr');
+    const inputs = fila.querySelectorAll('input[type="file"]');
+    
+    // Obtener el ID de la fila
+    const id = inputs[0].id.split('_')[1];
+    
+    // Eliminar archivos asociados
+    delete archivosPDFGastos[id];
+    delete archivosXMLGastos[id];
+    
+    fila.remove();
+    calcularTotalReembolso();
+    
+    console.log(`✓ Fila de gasto ${id} eliminada. Filas restantes: ${tbody.querySelectorAll('tr').length}`);
+}
+
+function limpiarFilaGasto(id) {
+    // Limpiar campos
+    const fecha = document.getElementById(`fecha_${id}`);
+    const factura = document.getElementById(`factura_${id}`);
+    const descripcion = document.getElementById(`descripcion_${id}`);
+    const proveedor = document.getElementById(`proveedor_${id}`);
+    const monto = document.getElementById(`monto_${id}`);
+    
+    if (fecha) fecha.value = new Date().toISOString().split('T')[0];
+    if (factura) factura.value = '';
+    if (descripcion) descripcion.value = '';
+    if (proveedor) proveedor.value = '';
+    if (monto) monto.value = '';
+    
+    // Limpiar archivos
+    eliminarArchivoPDFGasto(id);
+    eliminarArchivoXMLGasto(id);
+    
+    // Recalcular total
+    calcularTotalReembolso();
+}
+
+// Calcular total a reembolsar
+function calcularTotalReembolso() {
+    const filas = document.querySelectorAll('#bodyGastos tr');
+    let total = 0;
+    
+    filas.forEach(fila => {
+        const inputs = fila.querySelectorAll('input[type="text"], input[type="checkbox"]');
+        
+        // Buscar el campo de monto (contiene $)
+        let montoInput = null;
+        let autorizadoCheckbox = null;
+        
+        inputs.forEach(input => {
+            if (input.type === 'text' && input.value.includes('$')) {
+                montoInput = input;
+            }
+            if (input.type === 'checkbox') {
+                autorizadoCheckbox = input;
+            }
+        });
+        
+        if (montoInput && autorizadoCheckbox && autorizadoCheckbox.checked) {
+            const montoValor = extraerValorMoneda(montoInput.value);
+            total += montoValor;
+        }
+    });
+    
+    document.getElementById('totalReembolsar').textContent = 
+        '$' + total.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+// Obtener datos de gastos con archivos
+function obtenerDatosGastos() {
+    const filas = document.querySelectorAll('#bodyGastos tr');
+    const gastos = [];
+    
+    filas.forEach((fila, index) => {
+        const inputs = fila.querySelectorAll('input');
+        const idFila = inputs[5].id.split('_')[1]; // Obtener ID del input file
+        
+        gastos.push({
+            fecha: inputs[0].value,
+            factura: inputs[1].value,
+            descripcion: inputs[2].value,
+            proveedor: inputs[3].value, // Ahora es texto libre
+            monto: extraerValorMoneda(inputs[4].value),
+            archivoPDF: archivosPDFGastos[idFila] || null,
+            archivoXML: archivosXMLGastos[idFila] || null,
+            autorizado: inputs[7].checked
+        });
+    });
+    
+    return gastos;
+}
+
+// Validar gastos caja chica
+function validarGastosCajaChica() {
+    const filas = document.querySelectorAll('#bodyGastos tr');
+    
+    if (filas.length === 0) {
+        alert('Debe agregar al menos un gasto');
+        return false;
+    }
+    
+    let gastosValidos = 0;
+    let errores = [];
+    
+    for (let i = 0; i < filas.length; i++) {
+        const fila = filas[i];
+        const inputs = fila.querySelectorAll('input');
+        const numeroFila = i + 1;
+        
+        // Obtener el ID de la fila para los archivos
+        const idFila = inputs[5].id.split('_')[1];
+        
+        // Validar campos obligatorios de texto
+        const fecha = inputs[0].value;
+        const factura = inputs[1].value;
+        const descripcion = inputs[2].value;
+        const proveedor = inputs[3].value;
+        const monto = inputs[4].value;
+        
+        if (!fecha || !factura || !descripcion || !proveedor || !monto) {
+            errores.push(`Fila ${numeroFila}: Todos los campos de texto son obligatorios`);
+            continue;
+        }
+        
+        // Validar que el monto sea válido
+        const montoNumerico = extraerValorMoneda(monto);
+        if (montoNumerico <= 0) {
+            errores.push(`Fila ${numeroFila}: El monto debe ser mayor a $0.00`);
+            continue;
+        }
+        
+        // Validar archivo PDF obligatorio
+        if (!archivosPDFGastos[idFila]) {
+            errores.push(`Fila ${numeroFila}: Debe adjuntar el comprobante PDF/Imagen`);
+            continue;
+        }
+        
+        gastosValidos++;
+    }
+    
+    // Mostrar errores si existen
+    if (errores.length > 0) {
+        const mensajeError = 'Se encontraron los siguientes errores:\n\n' + errores.join('\n');
+        alert(mensajeError);
+        return false;
+    }
+    
+    // Validar que haya al menos un gasto válido
+    if (gastosValidos === 0) {
+        alert('Debe tener al menos un gasto completo y válido');
+        return false;
+    }
+    
+    return true;
+}
+
+// Cargar datos del beneficiario para caja chica
+function cargarDatosBeneficiarioCajaChica() {
+    const beneficiarioId = document.getElementById('beneficiarioCajaChica').value;
+    if (!beneficiarioId) {
+        document.getElementById('proveedorCajaChica').value = '';
+        document.getElementById('bancoCajaChica').value = '';
+        document.getElementById('cuentaCajaChica').value = '';
+        document.getElementById('clabeCajaChica').value = '';
+        return;
+    }
+    
+    const beneficiario = beneficiarios.find(b => b.id == beneficiarioId);
+    if (beneficiario) {
+        document.getElementById('proveedorCajaChica').value = beneficiario.razonSocial || beneficiario.nombre;
+        document.getElementById('bancoCajaChica').value = beneficiario.banco;
+        document.getElementById('cuentaCajaChica').value = beneficiario.cuenta;
+        document.getElementById('clabeCajaChica').value = beneficiario.clabe;
+    }
+}
+
+// Cargar beneficiarios en select de caja chica
+function cargarBeneficiariosSelectCajaChica() {
+    const select = document.getElementById('beneficiarioCajaChica');
+    if (!select) return;
+    select.innerHTML = '<option value="">Seleccione solicitante</option>';
+    
+    // Filtrar solo jefes de sucursal
+    const jefesSucursal = beneficiarios.filter(b => b.tipo === 'jefe_sucursal');
+    
+    jefesSucursal.forEach(beneficiario => {
+        const option = document.createElement('option');
+        option.value = beneficiario.id;
+        option.textContent = beneficiario.nombre;
+        select.appendChild(option);
+    });
+}
+
+// Mostrar autocompletado de proveedores
+function mostrarAutocomplete(id) {
+    const input = document.getElementById(`proveedor_${id}`);
+    const lista = document.getElementById(`autocomplete_${id}`);
+    const valor = input.value.toLowerCase().trim();
+    
+    if (valor.length === 0) {
+        lista.classList.remove('active');
+        return;
+    }
+    
+    // Filtrar proveedores
+    const proveedoresFiltrados = beneficiarios.filter(b => 
+        (b.tipo === 'proveedor' || !b.tipo) && 
+        b.nombre.toLowerCase().includes(valor)
+    );
+    
+    if (proveedoresFiltrados.length === 0) {
+        lista.classList.remove('active');
+        return;
+    }
+    
+    // Crear items de la lista
+    lista.innerHTML = '';
+    proveedoresFiltrados.forEach(proveedor => {
+        const item = document.createElement('div');
+        item.className = 'autocomplete-item';
+        
+        // Resaltar coincidencia
+        const nombreProveedor = proveedor.nombre;
+        const index = nombreProveedor.toLowerCase().indexOf(valor);
+        const antes = nombreProveedor.substring(0, index);
+        const coincidencia = nombreProveedor.substring(index, index + valor.length);
+        const despues = nombreProveedor.substring(index + valor.length);
+        
+        item.innerHTML = `${antes}<strong>${coincidencia}</strong>${despues}`;
+        
+        item.onclick = () => seleccionarProveedor(id, proveedor.nombre);
+        lista.appendChild(item);
+    });
+    
+    lista.classList.add('active');
+}
+
+// Ocultar autocompletado
+function ocultarAutocomplete(id) {
+    const lista = document.getElementById(`autocomplete_${id}`);
+    lista.classList.remove('active');
+}
+
+// Seleccionar proveedor del autocompletado
+function seleccionarProveedor(id, nombreProveedor) {
+    const input = document.getElementById(`proveedor_${id}`);
+    input.value = nombreProveedor;
+    ocultarAutocomplete(id);
+}
+
+async function crearSolicitud(event) {
+    event.preventDefault();
+    
+    console.log('=== CREAR/ACTUALIZAR SOLICITUD ===');
+    
+    const form = document.getElementById('solicitudForm');
+    const editingId = form.getAttribute('data-editing-id');
+    const isEditing = editingId !== null && editingId !== '';
+    
+    console.log('Modo edición:', isEditing);
+    console.log('ID editando:', editingId);
+    
+    const tipoFormato = document.getElementById('tipoFormato').value;
+    const empresaId = document.getElementById('empresa').value;
+    const sucursal = document.getElementById('sucursal').value;
+    
+    console.log('Tipo formato:', tipoFormato);
+    console.log('Empresa ID:', empresaId);
+    console.log('Sucursal:', sucursal);
+    
+    // Si NO estamos editando, validar empresa
+    if (!isEditing && !empresaId) {
         alert('Por favor seleccione una empresa');
         return;
     }
     
-    const porcentajeImpuestos = parseFloat(document.getElementById('impuestos').value) || 0;
-    const montoImpuestos = extraerValorMoneda(document.getElementById('montoImpuestos').value);
+    // Validaciones según el tipo de formato
+    if (tipoFormato === 'cajaChica') {
+        // Validaciones para Caja Chica
+        if (!validarGastosCajaChica()) {
+            return;
+        }
+        
+        const beneficiarioCajaChicaId = document.getElementById('beneficiarioCajaChica').value;
+        if (!beneficiarioCajaChicaId) {
+            alert('Por favor seleccione un solicitante');
+            return;
+        }
+        
+        if (!empresaId) {
+            alert('Por favor seleccione una empresa');
+            return;
+        }
+    } else {
+        // Validaciones para formato normal
+        const beneficiarioId = document.getElementById('beneficiario').value;
+        
+        if (!beneficiarioId) {
+            alert('Por favor seleccione un beneficiario');
+            return;
+        }
+        
+        if (!empresaId) {
+            alert('Por favor seleccione una empresa');
+            return;
+        }
+    }
     
     if (isEditing) {
-        // Modo edición
+        // ===== MODO EDICIÓN =====
+        console.log('Entrando a modo edición');
+        
         const solicitud = solicitudes.find(s => s.id == editingId);
-        if (solicitud && solicitud.estado === 'pendiente') {
-            solicitud.empresaId = parseInt(empresaId);
-            solicitud.beneficiarioId = parseInt(beneficiarioId);
-            solicitud.proveedor = document.getElementById('proveedor').value;
-            solicitud.conceptoGeneral = document.getElementById('conceptoGeneral').value;
-            solicitud.montoConceptoGeneral = extraerValorMoneda(document.getElementById('montoConceptoGeneral').value);
-            solicitud.conceptoPago = document.getElementById('conceptoPago').value;
-            solicitud.claveAnuncio = document.getElementById('claveAnuncio').value || '';
-            solicitud.subtotal = extraerValorMoneda(document.getElementById('subtotal').value);
-            solicitud.porcentajeImpuestos = porcentajeImpuestos;
-            solicitud.impuestos = montoImpuestos;
-            solicitud.total = extraerValorMoneda(document.getElementById('total').value);
-            solicitud.banco = document.getElementById('banco').value;
-            solicitud.cuenta = document.getElementById('cuenta').value;
-            solicitud.clabe = document.getElementById('clabe').value;
-            solicitud.ciudad = document.getElementById('ciudad').value;
-            
-            try {
+        
+        if (!solicitud) {
+            alert('Error: Solicitud no encontrada');
+            console.error('Solicitud no encontrada con ID:', editingId);
+            return;
+        }
+        
+        if (solicitud.estado !== 'pendiente') {
+            alert('Solo se pueden editar solicitudes con estado pendiente');
+            console.error('Estado de solicitud no es pendiente:', solicitud.estado);
+            return;
+        }
+        
+        console.log('Solicitud encontrada:', solicitud.numero);
+        console.log('Tipo de formato:', solicitud.tipoFormato);
+        
+        try {
+            if (solicitud.tipoFormato === 'cajaChica') {
+                // ===== ACTUALIZAR SOLICITUD DE CAJA CHICA =====
+                console.log('Actualizando solicitud de caja chica');
+                
+                const beneficiarioCajaChicaId = document.getElementById('beneficiarioCajaChica').value;
+                
+                if (!beneficiarioCajaChicaId) {
+                    alert('Por favor seleccione un solicitante');
+                    return;
+                }
+                
+                if (!validarGastosCajaChica()) {
+                    console.log('Validación de gastos falló');
+                    return;
+                }
+                
+                const gastos = obtenerDatosGastos();
+                const totalReembolsar = gastos
+                    .filter(g => g.autorizado)
+                    .reduce((sum, g) => sum + g.monto, 0);
+                
+                console.log('Gastos obtenidos:', gastos.length);
+                console.log('Total a reembolsar:', totalReembolsar);
+                
+                // Actualizar campos
+                solicitud.empresaId = parseInt(empresaId);
+                solicitud.beneficiarioId = parseInt(beneficiarioCajaChicaId);
+                solicitud.proveedor = document.getElementById('proveedorCajaChica').value;
+                solicitud.banco = document.getElementById('bancoCajaChica').value;
+                solicitud.cuenta = document.getElementById('cuentaCajaChica').value;
+                solicitud.clabe = document.getElementById('clabeCajaChica').value;
+                solicitud.ciudad = '';
+                solicitud.subtotal = totalReembolsar;
+                solicitud.total = totalReembolsar;
+                solicitud.montoConceptoGeneral = totalReembolsar;
+                solicitud.gastosCajaChica = gastos;
+                
+                console.log('Datos actualizados, guardando en Supabase...');
+                
+                // Guardar en Supabase
                 await actualizarSolicitudSupabase(solicitud);
-            } catch (error) {
-                console.error('Error al actualizar en Supabase:', error);
-                guardarDatos();
+                
+                // En lugar de recargar todo, solo actualizar el array local
+                const index = solicitudes.findIndex(s => s.id === solicitud.id);
+                if (index !== -1) {
+                    solicitudes[index] = { ...solicitud };
+                    console.log('✓ Solicitud actualizada en array local');
+                }
+
+                // NO recargar desde Supabase inmediatamente
+                // await cargarDatosDesdeSupabase();
+                
+                console.log('✓ Solicitud de caja chica actualizada');
+                
+            } else {
+                // ===== ACTUALIZAR SOLICITUD NORMAL =====
+                console.log('Actualizando solicitud normal');
+                
+                const beneficiarioId = document.getElementById('beneficiario').value;
+                const porcentajeImpuestos = parseFloat(document.getElementById('impuestos').value) || 0;
+                const montoImpuestos = extraerValorMoneda(document.getElementById('montoImpuestos').value);
+                
+                solicitud.empresaId = parseInt(empresaId);
+                solicitud.beneficiarioId = parseInt(beneficiarioId);
+                solicitud.proveedor = document.getElementById('proveedor').value;
+                solicitud.conceptoGeneral = document.getElementById('conceptoGeneral').value;
+                solicitud.montoConceptoGeneral = extraerValorMoneda(document.getElementById('montoConceptoGeneral').value);
+                solicitud.conceptoPago = document.getElementById('conceptoPago').value;
+                solicitud.claveAnuncio = document.getElementById('claveAnuncio').value || '';
+                solicitud.subtotal = extraerValorMoneda(document.getElementById('subtotal').value);
+                solicitud.descuento = 0;
+                solicitud.porcentajeImpuestos = porcentajeImpuestos;
+                solicitud.impuestos = montoImpuestos;
+                solicitud.total = extraerValorMoneda(document.getElementById('total').value);
+                solicitud.banco = document.getElementById('banco').value;
+                solicitud.cuenta = document.getElementById('cuenta').value;
+                solicitud.clabe = document.getElementById('clabe').value;
+                solicitud.ciudad = '';
+                
+                await actualizarSolicitudSupabase(solicitud);
+                await cargarDatosDesdeSupabase();
+                
+                console.log('✓ Solicitud normal actualizada');
             }
             
             alert('Solicitud actualizada exitosamente: ' + solicitud.numero);
             
+            // Limpiar modo edición
             form.removeAttribute('data-editing-id');
+            
+            // Restaurar botón
             const submitButton = document.querySelector('#solicitudForm button[type="submit"]');
             submitButton.textContent = 'Crear Solicitud';
             submitButton.style.background = '';
             
+            // Ocultar botón cancelar
+            const btnCancelar = document.getElementById('btnCancelarEdicion');
+            if (btnCancelar) {
+                btnCancelar.style.display = 'none';
+            }
+            
             limpiarFormulario();
             cargarSolicitudes();
             switchTab('solicitudes');
+            
+        } catch (error) {
+            console.error('Error al actualizar solicitud:', error);
+            alert('Error al actualizar la solicitud: ' + error.message);
         }
+        
+        return; // Salir de la función después de actualizar
     } else {
         // Modo creación
         const numeroAutomatico = document.getElementById('numeroAutomatico').checked;
@@ -734,40 +1602,92 @@ async function crearSolicitud(event) {
         }
         
         const numero = generarNumeroConsecutivo(sucursal, numeroConsecutivo);
+        const archivosAdjuntos = await procesarArchivosNuevaSolicitud();
         
-        const solicitudesVinculadasSelect = document.getElementById('solicitudVinculada');
-        const solicitudesVinculadas = Array.from(solicitudesVinculadasSelect.selectedOptions)
-            .map(option => option.value)
-            .filter(val => val !== '');
+        let solicitud;
         
-        const solicitud = {
-            id: Date.now(),
-            numero: numero,
-            numeroConsecutivo: numeroConsecutivo,
-            sucursal: sucursal,
-            empresaId: parseInt(empresaId),
-            beneficiarioId: parseInt(beneficiarioId),
-            proveedor: document.getElementById('proveedor').value,
-            conceptoGeneral: document.getElementById('conceptoGeneral').value,
-            montoConceptoGeneral: extraerValorMoneda(document.getElementById('montoConceptoGeneral').value),
-            conceptoPago: document.getElementById('conceptoPago').value,
-            claveAnuncio: document.getElementById('claveAnuncio').value || '',
-            subtotal: extraerValorMoneda(document.getElementById('subtotal').value),
-            descuento: 0,
-            porcentajeImpuestos: porcentajeImpuestos,
-            impuestos: montoImpuestos,
-            total: extraerValorMoneda(document.getElementById('total').value),
-            banco: document.getElementById('banco').value,
-            cuenta: document.getElementById('cuenta').value,
-            clabe: document.getElementById('clabe').value,
-            ciudad: document.getElementById('ciudad').value,
-            estado: 'pendiente',
-            fechaSolicitud: new Date().toISOString(),
-            fechaAutorizacion: null,
-            solicitudesVinculadas: solicitudesVinculadas,
-            archivos: [],
-            creadoPor: usuarioActual.username
-        };
+        if (tipoFormato === 'cajaChica') {
+            // Solicitud de Reembolso de Caja Chica
+            const beneficiarioCajaChicaId = document.getElementById('beneficiarioCajaChica').value;
+            const gastos = obtenerDatosGastos();
+            const totalReembolsar = gastos
+                .filter(g => g.autorizado)
+                .reduce((sum, g) => sum + g.monto, 0);
+            
+            const beneficiario = beneficiarios.find(b => b.id == beneficiarioCajaChicaId);
+            
+            solicitud = {
+                id: Date.now(),
+                numero: numero,
+                numeroConsecutivo: numeroConsecutivo,
+                sucursal: sucursal,
+                empresaId: parseInt(empresaId),
+                beneficiarioId: parseInt(beneficiarioCajaChicaId),
+                proveedor: document.getElementById('proveedorCajaChica').value,
+                conceptoGeneral: 'Reembolso de gastos de caja chica',
+                montoConceptoGeneral: totalReembolsar,
+                conceptoPago: 'Reembolso de gastos',
+                claveAnuncio: '',
+                subtotal: totalReembolsar,
+                descuento: 0,
+                porcentajeImpuestos: 0,
+                impuestos: 0,
+                total: totalReembolsar,
+                banco: document.getElementById('bancoCajaChica').value,
+                cuenta: document.getElementById('cuentaCajaChica').value,
+                clabe: document.getElementById('clabeCajaChica').value,
+                ciudad: '',
+                estado: 'pendiente',
+                fechaSolicitud: new Date().toISOString(),
+                fechaAutorizacion: null,
+                solicitudesVinculadas: [],
+                archivos: archivosAdjuntos,
+                creadoPor: usuarioActual.username,
+                tipoFormato: 'cajaChica',
+                gastosCajaChica: gastos
+            };
+        } else {
+            // Solicitud Normal
+            const beneficiarioId = document.getElementById('beneficiario').value;
+            const porcentajeImpuestos = parseFloat(document.getElementById('impuestos').value) || 0;
+            const montoImpuestos = extraerValorMoneda(document.getElementById('montoImpuestos').value);
+            
+            const solicitudesVinculadasSelect = document.getElementById('solicitudVinculada');
+            const solicitudesVinculadas = Array.from(solicitudesVinculadasSelect.selectedOptions)
+                .map(option => option.value)
+                .filter(val => val !== '');
+            
+            solicitud = {
+                id: Date.now(),
+                numero: numero,
+                numeroConsecutivo: numeroConsecutivo,
+                sucursal: sucursal,
+                empresaId: parseInt(empresaId),
+                beneficiarioId: parseInt(beneficiarioId),
+                proveedor: document.getElementById('proveedor').value,
+                conceptoGeneral: document.getElementById('conceptoGeneral').value,
+                montoConceptoGeneral: extraerValorMoneda(document.getElementById('montoConceptoGeneral').value),
+                conceptoPago: document.getElementById('conceptoPago').value,
+                claveAnuncio: document.getElementById('claveAnuncio').value || '',
+                subtotal: extraerValorMoneda(document.getElementById('subtotal').value),
+                descuento: 0,
+                porcentajeImpuestos: porcentajeImpuestos,
+                impuestos: montoImpuestos,
+                total: extraerValorMoneda(document.getElementById('total').value),
+                banco: document.getElementById('banco').value,
+                cuenta: document.getElementById('cuenta').value,
+                clabe: document.getElementById('clabe').value,
+                ciudad: '',
+                estado: 'pendiente',
+                fechaSolicitud: new Date().toISOString(),
+                fechaAutorizacion: null,
+                solicitudesVinculadas: solicitudesVinculadas,
+                archivos: archivosAdjuntos,
+                creadoPor: usuarioActual.username,
+                tipoFormato: 'normal',
+                gastosCajaChica: null
+            };
+        }
         
         try {
             const solicitudGuardada = await guardarSolicitudSupabase(solicitud);
@@ -786,6 +1706,15 @@ async function crearSolicitud(event) {
         if (confirm('¿Desea crear otra solicitud de fondos?')) {
             limpiarFormulario();
             cargarSolicitudesVinculadas();
+            
+            // Si era caja chica, asegurar que solo haya una fila
+            const tipoFormato = document.getElementById('tipoFormato').value;
+            if (tipoFormato === 'cajaChica') {
+                const tbody = document.getElementById('bodyGastos');
+                if (tbody && tbody.querySelectorAll('tr').length === 0) {
+                    agregarFilaGasto();
+                }
+            }
         } else {
             limpiarFormulario();
             cargarSolicitudes();
@@ -795,6 +1724,7 @@ async function crearSolicitud(event) {
 }
 
 function limpiarFormulario() {
+    // Limpiar formulario básico
     document.getElementById('solicitudForm').reset();
     document.getElementById('proveedor').value = '';
     document.getElementById('banco').value = '';
@@ -811,12 +1741,67 @@ function limpiarFormulario() {
     document.getElementById('numeroAutomatico').checked = true;
     toggleNumeroConsecutivo();
     
+    // Limpiar solicitudes vinculadas
     const solicitudVinculadaSelect = document.getElementById('solicitudVinculada');
     if (solicitudVinculadaSelect) {
         Array.from(solicitudVinculadaSelect.options).forEach((opt, index) => {
             opt.selected = (opt.value === '');
         });
     }
+
+    // Limpiar archivos de nueva solicitud
+    document.getElementById('archivosNuevaSolicitud').value = '';
+    document.getElementById('listaArchivosNuevaSolicitud').innerHTML = '';
+    
+    // ===== LIMPIAR CAJA CHICA =====
+    
+    // 1. Limpiar campos de beneficiario de caja chica
+    const beneficiarioCajaChica = document.getElementById('beneficiarioCajaChica');
+    const proveedorCajaChica = document.getElementById('proveedorCajaChica');
+    const bancoCajaChica = document.getElementById('bancoCajaChica');
+    const cuentaCajaChica = document.getElementById('cuentaCajaChica');
+    const clabeCajaChica = document.getElementById('clabeCajaChica');
+    
+    if (beneficiarioCajaChica) beneficiarioCajaChica.value = '';
+    if (proveedorCajaChica) proveedorCajaChica.value = '';
+    if (bancoCajaChica) bancoCajaChica.value = '';
+    if (cuentaCajaChica) cuentaCajaChica.value = '';
+    if (clabeCajaChica) clabeCajaChica.value = '';
+    
+    // 2. Limpiar todas las filas de gastos
+    const tbody = document.getElementById('bodyGastos');
+    if (tbody) {
+        tbody.innerHTML = '';
+    }
+    
+    // 3. Resetear contadores y archivos de gastos
+    contadorFilasGastos = 0;
+    archivosPDFGastos = {};
+    archivosXMLGastos = {};
+    
+    // 4. Resetear total a reembolsar
+    const totalReembolsar = document.getElementById('totalReembolsar');
+    if (totalReembolsar) {
+        totalReembolsar.textContent = '$0.00';
+    }
+    
+    // 5. Agregar UNA sola fila inicial si estamos en modo caja chica
+    const tipoFormato = document.getElementById('tipoFormato').value;
+    if (tipoFormato === 'cajaChica' && tbody) {
+        agregarFilaGasto();
+    }
+    
+    console.log('✓ Formulario limpiado completamente');
+    console.log('  - Contador gastos reseteado a:', contadorFilasGastos);
+    console.log('  - Archivos PDF limpiados');
+    console.log('  - Archivos XML limpiados');
+
+    console.log('=== FORMULARIO LIMPIO ===');
+    console.log('Contador:', contadorFilasGastos);
+    console.log('Archivos PDF:', Object.keys(archivosPDFGastos).length);
+    console.log('Archivos XML:', Object.keys(archivosXMLGastos).length);
+    console.log('Filas en tabla:', document.querySelectorAll('#bodyGastos tr').length);
+    console.log('========================');
 }
 
 function cargarSolicitudes() {
@@ -834,17 +1819,25 @@ function cargarSolicitudes() {
         }
     }
     
-    solicitudesFiltradas.forEach(solicitud => {
+    // Ordenar por fecha descendente (más reciente primero)
+    solicitudesFiltradas.sort((a, b) => new Date(b.fechaSolicitud) - new Date(a.fechaSolicitud));
+    
+    // Separar por estado
+    const pendientes = solicitudesFiltradas.filter(s => s.estado === 'pendiente');
+    const finalizadas = solicitudesFiltradas.filter(s => s.estado === 'autorizada' || s.estado === 'cancelada');
+    
+    // Función para crear fila
+    const crearFila = (solicitud) => {
         const empresa = empresas.find(e => e.id === solicitud.empresaId);
         const row = tbody.insertRow();
         
         const tieneComprobante = solicitud.comprobantePago ? true : false;
         const iconoComprobante = tieneComprobante ? '📄' : '';
         
-        // Botones según permisos
         const puedeEditar = tienePermiso('editar_solicitud') && solicitud.estado === 'pendiente';
         const puedeAutorizar = tienePermiso('autorizar_solicitud') && solicitud.estado === 'pendiente';
         const puedeCancelar = tienePermiso('cancelar_solicitud');
+        const puedeDescargarArchivos = tienePermiso('descargar_archivos');
         
         const botonesAccion = `
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 3px; max-width: 140px;">
@@ -898,7 +1891,6 @@ function cargarSolicitudes() {
             </div>
         ` : `<span style="font-size: 11px;">${solicitud.pagada ? 'Sí' : 'No'}</span>`;
         
-        // Columna de Origen con información agrupada
         const columnaOrigen = `
             <div style="font-size: 13px; line-height: 1.5;">
                 <div style="font-weight: 600; color: var(--primary-color);">${solicitud.numero}</div>
@@ -907,17 +1899,114 @@ function cargarSolicitudes() {
             </div>
         `;
         
+        // Contar TODOS los archivos
+        let totalArchivos = 0;
+
+        // Archivos adjuntos generales
+        if (solicitud.archivos && solicitud.archivos.length > 0) {
+            totalArchivos += solicitud.archivos.length;
+        }
+
+        // Archivos de gastos de caja chica
+        if (solicitud.tipoFormato === 'cajaChica' && solicitud.gastosCajaChica) {
+            solicitud.gastosCajaChica.forEach(gasto => {
+                if (gasto.archivoPDF) totalArchivos++;
+                if (gasto.archivoXML) totalArchivos++;
+            });
+        }
+
+        // Crear columna de archivos
+        let columnaArchivos = '';
+
+        if (puedeDescargarArchivos) {
+            columnaArchivos = `
+                <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
+                    <span style="font-size: 11px; font-weight: 600; color: #495057;">${totalArchivos} archivo(s)</span>
+                    
+                    ${totalArchivos > 0 ? `
+                        <button class="btn" onclick="descargarArchivosZip(${solicitud.id})" 
+                                style="padding: 4px 10px; font-size: 10px; background: #17a2b8; color: white; white-space: nowrap;">
+                            ↓ ZIP
+                        </button>
+                    ` : ''}
+                    
+                    ${solicitud.tipoFormato !== 'cajaChica' ? `
+                        <button class="btn" onclick="subirFacturaSolicitud(${solicitud.id})" 
+                                style="padding: 4px 10px; font-size: 10px; background: #28a745; color: white; white-space: nowrap;">
+                            ↑ PDF y XML
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+        } else {
+            // Sin permisos, solo mostrar contador
+            columnaArchivos = totalArchivos > 0 
+                ? `<span style="font-size: 11px;">${totalArchivos} archivo(s)</span>` 
+                : '-';
+        }
+        
         row.innerHTML = `
             <td style="min-width: 180px;">${columnaOrigen}</td>
-            <td>${solicitud.proveedor}</td>
-            <td style="min-width: 200px;">${solicitud.conceptoGeneral.substring(0, 60)}${solicitud.conceptoGeneral.length > 60 ? '...' : ''}</td>
+            <td style="min-width: 280px;">
+                <div style="font-size: 13px; line-height: 1.5;">
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <span style="font-weight: 600; color: #2c3e50;">
+                            ${solicitud.proveedor}
+                        </span>
+                        ${solicitud.tipoFormato === 'cajaChica' 
+                            ? '<span style="background: #e3f2fd; color: #1976d2; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600;">REEMBOLSO</span>' 
+                            : ''}
+                    </div>
+                    <div style="color: #6c757d; font-size: 12px; line-height: 1.4;">
+                        ${solicitud.conceptoGeneral.length > 90 
+                            ? solicitud.conceptoGeneral.substring(0, 90) + '...' 
+                            : solicitud.conceptoGeneral}
+                    </div>
+                </div>
+            </td>
             <td style="white-space: nowrap;">$${solicitud.total.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
             <td><span class="status ${solicitud.estado}">${solicitud.estado.toUpperCase()}</span></td>
             <td style="white-space: nowrap;">${formatearFecha(solicitud.fechaSolicitud)}</td>
+            <td style="text-align: center;">${columnaArchivos}</td>
             <td>${columnaPagada}</td>
             <td class="acciones-column">${botonesAccion}</td>
         `;
-    });
+    };
+    
+    // Agregar sección de pendientes
+    if (pendientes.length > 0) {
+        const headerRow = tbody.insertRow();
+        headerRow.style.background = 'linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%)';
+        headerRow.innerHTML = `
+            <td colspan="8" style="padding: 12px; font-weight: 700; color: #856404; text-align: center; font-size: 14px;">
+                📋 SOLICITUDES PENDIENTES (${pendientes.length})
+            </td>
+        `;
+        
+        pendientes.forEach(sol => crearFila(sol));
+    }
+    
+    // Agregar sección de finalizadas
+    if (finalizadas.length > 0) {
+        const headerRow = tbody.insertRow();
+        headerRow.style.background = 'linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%)';
+        headerRow.innerHTML = `
+            <td colspan="8" style="padding: 12px; font-weight: 700; color: #3d4f82; text-align: center; font-size: 14px;">
+                📁 SOLICITUDES FINALIZADAS (${finalizadas.length})
+            </td>
+        `;
+        
+        finalizadas.forEach(sol => crearFila(sol));
+    }
+    
+    if (pendientes.length === 0 && finalizadas.length === 0) {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+            <td colspan="8" style="text-align: center; padding: 40px; color: #999;">
+                No hay solicitudes para mostrar
+            </td>
+        `;
+    }
 }
 
 function exportarSolicitudesCSV() {
@@ -947,7 +2036,7 @@ function exportarSolicitudesCSV() {
         'Banco',
         'Cuenta',
         'CLABE',
-        'Ciudad',
+        //'Ciudad',
         'Estado',
         'Fecha Autorización',
         'Clave Anuncio',
@@ -979,7 +2068,7 @@ function exportarSolicitudesCSV() {
             sol.banco || '',
             sol.cuenta || '',
             sol.clabe || '',
-            sol.ciudad || '',
+            //sol.ciudad || '',
             sol.estado || '',
             formatearFecha(sol.fechaAutorizacion),
             sol.claveAnuncio || '',
@@ -1020,25 +2109,196 @@ function editarSolicitud(id) {
     // Cambiar a la pestaña de nueva solicitud
     switchTab('nueva');
     
-    // Cargar los datos de la solicitud en el formulario
-    document.getElementById('empresa').value = solicitud.empresaId;
-    document.getElementById('sucursal').value = solicitud.sucursal;
-    document.getElementById('beneficiario').value = solicitud.beneficiarioId;
+    // Determinar el tipo de formato
+    const esCajaChica = solicitud.tipoFormato === 'cajaChica';
     
-    // Cargar datos del beneficiario
-    cargarDatosBeneficiario();
-    
-    document.getElementById('conceptoGeneral').value = solicitud.conceptoGeneral;
-    document.getElementById('montoConceptoGeneral').value = '$' + solicitud.montoConceptoGeneral.toLocaleString('es-MX', {minimumFractionDigits: 2});
-    document.getElementById('conceptoPago').value = solicitud.conceptoPago || '';
-    document.getElementById('claveAnuncio').value = solicitud.claveAnuncio || '';
-    document.getElementById('subtotal').value = '$' + solicitud.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2});
-    document.getElementById('descuento').value = '$' + solicitud.descuento.toLocaleString('es-MX', {minimumFractionDigits: 2});
-    document.getElementById('impuestos').value = solicitud.porcentajeImpuestos;
-    document.getElementById('ciudad').value = solicitud.ciudad;
-    
-    // Calcular total
-    calcularTotal();
+    if (esCajaChica) {
+        // ===== EDITAR SOLICITUD DE CAJA CHICA =====
+        
+        // Cambiar al formato de caja chica
+        cambiarFormato('cajaChica');
+        
+        // Cargar datos básicos
+        document.getElementById('empresa').value = solicitud.empresaId;
+        document.getElementById('sucursal').value = solicitud.sucursal;
+        document.getElementById('beneficiarioCajaChica').value = solicitud.beneficiarioId;
+        
+        // Cargar datos del beneficiario
+        cargarDatosBeneficiarioCajaChica();
+        
+        // Limpiar tabla de gastos actual
+        const tbody = document.getElementById('bodyGastos');
+        tbody.innerHTML = '';
+        
+        // Resetear contadores y archivos
+        contadorFilasGastos = 0;
+        archivosPDFGastos = {};
+        archivosXMLGastos = {};
+        
+        // Cargar gastos de la solicitud
+        if (solicitud.gastosCajaChica && solicitud.gastosCajaChica.length > 0) {
+            solicitud.gastosCajaChica.forEach(gasto => {
+                const id = ++contadorFilasGastos;
+                
+                // Crear fila
+                const fila = tbody.insertRow();
+                fila.innerHTML = `
+                    <td>
+                        <input type="date" id="fecha_${id}" class="gasto-campo" required 
+                               value="${gasto.fecha}">
+                    </td>
+                    <td>
+                        <input type="text" id="factura_${id}" class="gasto-campo" 
+                               placeholder="Núm. factura" required value="${gasto.factura}">
+                    </td>
+                    <td>
+                        <input type="text" id="descripcion_${id}" class="gasto-campo" 
+                               placeholder="Descripción del gasto" required value="${gasto.descripcion}">
+                    </td>
+                    <td>
+                        <div class="autocomplete-container">
+                            <input type="text" id="proveedor_${id}" class="gasto-campo" 
+                                   placeholder="Nombre del proveedor" required value="${gasto.proveedor}"
+                                   oninput="mostrarAutocomplete(${id})"
+                                   onfocus="mostrarAutocomplete(${id})"
+                                   onblur="setTimeout(() => ocultarAutocomplete(${id}), 200)">
+                            <div id="autocomplete_${id}" class="autocomplete-list"></div>
+                        </div>
+                    </td>
+                    <td>
+                        <input type="text" id="monto_${id}" class="gasto-campo" 
+                               placeholder="$0.00" required value="$${gasto.monto.toLocaleString('es-MX', {minimumFractionDigits: 2})}"
+                            oninput="formatearMoneda(this)" 
+                            onblur="formatearMonedaCompleto(this); calcularTotalReembolso()"
+                            onkeyup="calcularTotalReembolso()">
+                    </td>
+                    <td>
+                        <input type="file" id="archivoPDF_${id}" accept=".pdf,.jpg,.jpeg,.png" 
+                               onchange="manejarArchivoPDF(${id})" 
+                               style="display: none;">
+                        <button type="button" id="btnSubirPDF_${id}" class="btn btn-secondary" 
+                                onclick="document.getElementById('archivoPDF_${id}').click()"
+                                style="padding: 4px 8px; font-size: 11px; width: 100%; ${gasto.archivoPDF ? 'background: #28a745;' : ''}">
+                            ${gasto.archivoPDF ? '✓ Cargado' : 'Subir'}
+                        </button>
+                        <div id="statusPDF_${id}" class="archivo-status ${gasto.archivoPDF ? 'cargado' : 'pendiente'}" 
+                             style="display: block;">
+                            ${gasto.archivoPDF ? gasto.archivoPDF.nombre : 'Sin archivo'}
+                        </div>
+                    </td>
+                    <td>
+                        <input type="file" id="archivoXML_${id}" accept=".xml" 
+                               onchange="manejarArchivoXML(${id})" 
+                               style="display: none;">
+                        <button type="button" id="btnSubirXML_${id}" class="btn btn-secondary" 
+                                onclick="document.getElementById('archivoXML_${id}').click()"
+                                style="padding: 4px 8px; font-size: 11px; width: 100%; ${gasto.archivoXML ? 'background: #28a745;' : ''}">
+                            ${gasto.archivoXML ? '✓ XML' : 'XML'}
+                        </button>
+                        <div id="statusXML_${id}" class="archivo-status ${gasto.archivoXML ? 'cargado' : 'pendiente'}" 
+                             style="display: block;">
+                            ${gasto.archivoXML ? gasto.archivoXML.nombre : 'Opcional'}
+                        </div>
+                    </td>
+                    <td style="text-align: center;">
+                        <input type="checkbox" id="autorizado_${id}" class="checkbox-autorizado" 
+                               ${gasto.autorizado ? 'checked' : ''} onchange="calcularTotalReembolso()">
+                    </td>
+                    <td style="text-align: center;">
+                        <button type="button" class="btn btn-danger" onclick="eliminarFilaGasto(this)" 
+                                style="padding: 5px 10px; font-size: 12px;">✕</button>
+                    </td>
+                `;
+                
+                // Restaurar archivos
+                if (gasto.archivoPDF) {
+                    archivosPDFGastos[id] = gasto.archivoPDF;
+                    
+                    // Agregar botones de acción para PDF
+                    const statusPDF = document.getElementById(`statusPDF_${id}`);
+                    const containerBotones = document.createElement('div');
+                    containerBotones.style.display = 'flex';
+                    containerBotones.style.gap = '4px';
+                    containerBotones.style.marginTop = '4px';
+                    
+                    const btnVer = document.createElement('button');
+                    btnVer.type = 'button';
+                    btnVer.className = 'btn-accion-archivo';
+                    btnVer.textContent = '👁';
+                    btnVer.title = 'Ver archivo';
+                    btnVer.onclick = () => verArchivoGasto(id, 'pdf');
+                    
+                    const btnEliminar = document.createElement('button');
+                    btnEliminar.type = 'button';
+                    btnEliminar.className = 'btn-accion-archivo btn-eliminar';
+                    btnEliminar.textContent = '🗑';
+                    btnEliminar.title = 'Eliminar archivo';
+                    btnEliminar.onclick = () => eliminarArchivoPDFGasto(id);
+                    
+                    containerBotones.appendChild(btnVer);
+                    containerBotones.appendChild(btnEliminar);
+                    statusPDF.parentNode.appendChild(containerBotones);
+                }
+                
+                if (gasto.archivoXML) {
+                    archivosXMLGastos[id] = gasto.archivoXML;
+                    
+                    // Agregar botones de acción para XML
+                    const statusXML = document.getElementById(`statusXML_${id}`);
+                    const containerBotones = document.createElement('div');
+                    containerBotones.style.display = 'flex';
+                    containerBotones.style.gap = '4px';
+                    containerBotones.style.marginTop = '4px';
+                    
+                    const btnDescargar = document.createElement('button');
+                    btnDescargar.type = 'button';
+                    btnDescargar.className = 'btn-accion-archivo';
+                    btnDescargar.textContent = '⬇';
+                    btnDescargar.title = 'Descargar archivo';
+                    btnDescargar.onclick = () => descargarArchivoGasto(id, 'xml');
+                    
+                    const btnEliminar = document.createElement('button');
+                    btnEliminar.type = 'button';
+                    btnEliminar.className = 'btn-accion-archivo btn-eliminar';
+                    btnEliminar.textContent = '🗑';
+                    btnEliminar.title = 'Eliminar archivo';
+                    btnEliminar.onclick = () => eliminarArchivoXMLGasto(id);
+                    
+                    containerBotones.appendChild(btnDescargar);
+                    containerBotones.appendChild(btnEliminar);
+                    statusXML.parentNode.appendChild(containerBotones);
+                }
+            });
+            
+            // Calcular total
+            calcularTotalReembolso();
+        }
+        
+    } else {
+        // ===== EDITAR SOLICITUD NORMAL =====
+        
+        // Cambiar al formato normal
+        cambiarFormato('normal');
+        
+        // Cargar datos
+        document.getElementById('empresa').value = solicitud.empresaId;
+        document.getElementById('sucursal').value = solicitud.sucursal;
+        document.getElementById('beneficiario').value = solicitud.beneficiarioId;
+        
+        // Cargar datos del beneficiario
+        cargarDatosBeneficiario();
+        
+        document.getElementById('conceptoGeneral').value = solicitud.conceptoGeneral;
+        document.getElementById('montoConceptoGeneral').value = '$' + solicitud.montoConceptoGeneral.toLocaleString('es-MX', {minimumFractionDigits: 2});
+        document.getElementById('conceptoPago').value = solicitud.conceptoPago || '';
+        document.getElementById('claveAnuncio').value = solicitud.claveAnuncio || '';
+        document.getElementById('subtotal').value = '$' + solicitud.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2});
+        document.getElementById('descuento').value = '$' + solicitud.descuento.toLocaleString('es-MX', {minimumFractionDigits: 2});
+        document.getElementById('impuestos').value = solicitud.porcentajeImpuestos;
+        
+        // Calcular total
+        calcularTotal();
+    }
     
     // Marcar que estamos editando (guardar el ID)
     document.getElementById('solicitudForm').setAttribute('data-editing-id', id);
@@ -1047,8 +2307,44 @@ function editarSolicitud(id) {
     const submitButton = document.querySelector('#solicitudForm button[type="submit"]');
     submitButton.textContent = 'Actualizar Solicitud';
     submitButton.style.background = '#ffc107';
-    
+
+    // Mostrar botón cancelar
+    const btnCancelar = document.getElementById('btnCancelarEdicion');
+    if (btnCancelar) {
+        btnCancelar.style.display = 'inline-block';
+    }
+
     alert('Editando solicitud ' + solicitud.numero + '. Modifique los campos necesarios y presione "Actualizar Solicitud"');
+}
+
+function cancelarEdicion() {
+    if (!confirm('¿Está seguro de cancelar la edición? Los cambios no guardados se perderán.')) {
+        return;
+    }
+    
+    console.log('Cancelando edición...');
+    
+    const form = document.getElementById('solicitudForm');
+    form.removeAttribute('data-editing-id');
+    
+    // Restaurar botón de submit
+    const submitButton = document.querySelector('#solicitudForm button[type="submit"]');
+    submitButton.textContent = 'Crear Solicitud';
+    submitButton.style.background = '';
+    
+    // Ocultar botón cancelar
+    const btnCancelar = document.getElementById('btnCancelarEdicion');
+    if (btnCancelar) {
+        btnCancelar.style.display = 'none';
+    }
+    
+    // Limpiar formulario
+    limpiarFormulario();
+    
+    // Volver a la pestaña de solicitudes
+    switchTab('solicitudes');
+    
+    console.log('✓ Edición cancelada');
 }
 
 // SECCIÓN 2 - Visualización y PDF Mejorado
@@ -1057,6 +2353,15 @@ function verDetalle(id) {
     const solicitud = solicitudes.find(s => s.id === id);
     if (!solicitud) return;
     
+    // ===== DEBUGGING TEMPORAL =====
+    console.log('=== VER DETALLE DE SOLICITUD ===');
+    console.log('ID:', solicitud.id);
+    console.log('Número:', solicitud.numero);
+    console.log('Tipo:', solicitud.tipoFormato);
+    console.log('Gastos Caja Chica:', solicitud.gastosCajaChica);
+    console.log('================================');
+    // ==============================
+
     const modal = document.getElementById('detalleModal');
     const content = document.getElementById('modalContent');
     const title = document.getElementById('modalTitle');
@@ -1082,20 +2387,114 @@ function verDetalle(id) {
         }
     }
     
-    // Generar tabla de solicitudes vinculadas
-    let htmlVinculadas = '';
+    // Determinar el título según el tipo de formato
+const tituloSolicitud = solicitud.tipoFormato === 'cajaChica' 
+    ? 'SOLICITUD DE REEMBOLSO DE GASTOS DE CAJA CHICA' 
+    : 'SOLICITUD DE FONDOS';
+
+// ===== VERIFICACIÓN CRÍTICA =====
+// console.log('=== VERIFICANDO TIPO DE FORMATO ===');
+// console.log('ID Solicitud:', solicitud.id);
+// console.log('Tipo formato:', solicitud.tipoFormato);
+// console.log('¿Es caja chica?:', solicitud.tipoFormato === 'cajaChica');
+// console.log('Gastos disponibles:', solicitud.gastosCajaChica);
+// console.log('================================');
+
+// Generar contenido según el tipo de formato
+let htmlTablaContenido = '';
+let htmlSeccionConcepto = '';
+
+if (solicitud.tipoFormato === 'cajaChica') {
+    // ===== FORMATO CAJA CHICA =====
+    // Verificar que existan gastos en esta solicitud
+    if (!solicitud.gastosCajaChica || !Array.isArray(solicitud.gastosCajaChica)) {
+        console.warn('No hay gastos de caja chica para esta solicitud:', solicitud.id);
+        solicitud.gastosCajaChica = [];
+    }
     
-    // Buscar todas las solicitudes que compartan el mismo concepto general
+    // Filtrar SOLO los gastos autorizados de ESTA solicitud
+    const gastosAutorizados = solicitud.gastosCajaChica.filter(g => g.autorizado === true);
+    const totalAutorizado = gastosAutorizados.reduce((sum, g) => sum + (g.monto || 0), 0);
+    
+    console.log('Gastos de esta solicitud:', solicitud.gastosCajaChica);
+    console.log('Gastos autorizados:', gastosAutorizados);
+    console.log('Total autorizado:', totalAutorizado);
+    
+    htmlTablaContenido = `
+        <div style="margin: 8px 0; padding: 6px; background: #f8f9fa; border: 1px solid #9c27b0;">
+            <strong style="font-size: 9px; display: block; margin-bottom: 4px;">DESGLOSE DE GASTOS AUTORIZADOS:</strong>
+            <table style="width: 100%; font-size: 9px; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #e0e0e0;">
+                        <th style="padding: 3px; border: 1px solid #ccc; text-align: left;">Fecha Factura</th>
+                        <th style="padding: 3px; border: 1px solid #ccc; text-align: left;">Factura/Nota</th>
+                        <th style="padding: 3px; border: 1px solid #ccc; text-align: left;">Descripción</th>
+                        <th style="padding: 3px; border: 1px solid #ccc; text-align: left;">Proveedor</th>
+                        <th style="padding: 3px; border: 1px solid #ccc; text-align: right;">Monto</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    if (gastosAutorizados.length > 0) {
+        gastosAutorizados.forEach(gasto => {
+            const fechaFormateada = formatearFecha(gasto.fecha);
+            htmlTablaContenido += `
+                <tr>
+                    <td style="padding: 3px; border: 1px solid #ccc;">${fechaFormateada}</td>
+                    <td style="padding: 3px; border: 1px solid #ccc;">${gasto.factura}</td>
+                    <td style="padding: 3px; border: 1px solid #ccc;">${gasto.descripcion}</td>
+                    <td style="padding: 3px; border: 1px solid #ccc;">${gasto.proveedor || 'N/A'}</td>
+                    <td style="padding: 3px; border: 1px solid #ccc; text-align: right;">$${gasto.monto.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                </tr>
+            `;
+        });
+    } else {
+        htmlTablaContenido += `
+            <tr>
+                <td colspan="5" style="padding: 3px; border: 1px solid #ccc; text-align: center; color: #999;">
+                    No hay gastos autorizados
+                </td>
+            </tr>
+        `;
+    }
+    
+    htmlTablaContenido += `
+                <tr style="background: #fff3cd; font-weight: bold;">
+                    <td colspan="4" style="padding: 3px; border: 1px solid #ccc; text-align: right;">TOTAL A REEMBOLSAR:</td>
+                    <td style="padding: 3px; border: 1px solid #ccc; text-align: right;">$${totalAutorizado.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    `;
+    
+    // Botón para descargar archivos (solo para caja chica)
+    if (gastosAutorizados.length > 0 && gastosAutorizados.some(g => g.archivoPDF || g.archivoXML)) {
+        htmlTablaContenido += `
+            <div style="margin-top: 10px; text-align: center;">
+                <button class="btn" onclick="descargarArchivosGastosZip(${solicitud.id})" 
+                        style="padding: 8px 16px; background: #17a2b8; color: white; font-size: 11px;">
+                    📦 Descargar Todos los Archivos (ZIP)
+                </button>
+            </div>
+        `;
+    }
+    
+    // NO mostrar sección de concepto para caja chica
+    htmlSeccionConcepto = '';
+    
+} else {
+    // ===== FORMATO NORMAL =====
     const solicitudesRelacionadas = solicitudes.filter(sol => 
         sol.conceptoGeneral === solicitud.conceptoGeneral && sol.estado !== 'cancelada');
     
-    // SIEMPRE mostrar la tabla (incluso si solo hay una solicitud)
     const totalPagosRealizados = solicitudesRelacionadas
         .reduce((sum, sol) => sum + sol.subtotal, 0);
     
     const montoPendiente = (solicitud.montoConceptoGeneral || 0) - totalPagosRealizados;
     
-    htmlVinculadas = `
+    htmlTablaContenido = `
         <div style="margin: 8px 0; padding: 6px; background: #f8f9fa; border: 1px solid #d01f34;">
             <strong style="font-size: 9px; display: block; margin-bottom: 4px;">DESGLOSE DE PAGOS DEL CONCEPTO GENERAL:</strong>
             <table style="width: 100%; font-size: 9px; border-collapse: collapse;">
@@ -1117,7 +2516,7 @@ function verDetalle(id) {
             const esActual = sol.id === solicitud.id;
             const estiloFila = esActual ? 'background: #fffacd; font-weight: bold;' : '';
             
-            htmlVinculadas += `
+            htmlTablaContenido += `
                 <tr style="${estiloFila}">
                     <td style="padding: 3px; border: 1px solid #ccc;">${formatearFecha(sol.fechaSolicitud)}</td>
                     <td style="padding: 3px; border: 1px solid #ccc;">${sol.numero}${esActual ? ' (Actual)' : ''}</td>
@@ -1128,7 +2527,7 @@ function verDetalle(id) {
             `;
         });
     } else {
-        htmlVinculadas += `
+        htmlTablaContenido += `
             <tr>
                 <td colspan="5" style="padding: 3px; border: 1px solid #ccc; text-align: center; color: #999;">
                     No hay pagos registrados para este concepto
@@ -1137,7 +2536,7 @@ function verDetalle(id) {
         `;
     }
     
-    htmlVinculadas += `
+    htmlTablaContenido += `
                 <tr style="background: #fff3cd; font-weight: bold;">
                     <td colspan="3" style="padding: 3px; border: 1px solid #ccc; text-align: right;">MONTO PENDIENTE DE PAGO:</td>
                     <td style="padding: 3px; border: 1px solid #ccc; text-align: right;">$${montoPendiente.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
@@ -1148,8 +2547,48 @@ function verDetalle(id) {
         </div>
     `;
     
+    // SÍ mostrar sección de concepto para formato normal
+    htmlSeccionConcepto = `
+        <!-- CONCEPTO (solo para formato normal) -->
+        <div style="margin: 8px 0;">
+            <div style="background: #d01f34; color: white; padding: 4px; font-weight: bold; font-size: 9px;">CONCEPTO</div>
+            <div style="padding: 6px; border: 1px solid #606060; border-top: none; background: #fafafa;">
+                <table style="width: 100%; font-size: 8px; table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 35%;">
+                        <col style="width: 65%;">
+                    </colgroup>
+                    <tr>
+                        <td style="padding: 2px; vertical-align: top;"><strong>CONCEPTO GENERAL:</strong></td>
+                        <td style="padding: 2px; word-wrap: break-word;">${solicitud.conceptoGeneral}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 2px; vertical-align: top;"><strong>MONTO TOTAL DEL CONCEPTO:</strong></td>
+                        <td style="padding: 2px;">$${(solicitud.montoConceptoGeneral || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                    </tr>
+                    ${solicitud.conceptoPago ? `
+                    <tr>
+                        <td style="padding: 2px; vertical-align: top;"><strong>CONCEPTO DE PAGO:</strong></td>
+                        <td style="padding: 2px; word-wrap: break-word;">${solicitud.conceptoPago}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 2px; vertical-align: top;"><strong>Monto del Concepto de Pago:</strong></td>
+                        <td style="padding: 2px;">$${solicitud.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                    </tr>
+                    ` : `
+                    <tr>
+                        <td style="padding: 2px; vertical-align: top;"><strong>Monto del Concepto de Pago:</strong></td>
+                        <td style="padding: 2px;">$${solicitud.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                    </tr>
+                    `}
+                </table>
+            </div>
+        </div>
+    `;
+}
+    
     content.innerHTML = `
-        <div id="contenidoImprimible" style="font-family: Arial, sans-serif; padding: 10px; max-width: 750px; margin: 0 auto; background: white;">
+        <div id="contenidoImprimible" style="font-family: Arial, sans-serif; padding: 10px; max-width: 100%; margin: 0 auto; background: white;">
             
             <div style="text-align: center; margin-bottom: 8px;">
                 ${logoHTML}
@@ -1171,7 +2610,7 @@ function verDetalle(id) {
             
             <div style="border: 2px solid #d01f34; padding: 10px; margin-bottom: 10px;">
                 <div style="border: 1px solid #606060; padding: 8px;">
-                    <h2 style="text-align: center; color: #d01f34; margin: 0 0 4px 0; font-size: 14px;">SOLICITUD DE FONDOS</h2>
+                    <h2 style="text-align: center; color: #d01f34; margin: 0 0 4px 0; font-size: 14px;">${tituloSolicitud}</h2>
                     <h3 style="text-align: center; color: #606060; margin: 0; font-size: 11px;">${solicitud.numero}</h3>
                     <hr style="border: none; border-top: 1px solid #d01f34; margin: 6px 0;">
                     
@@ -1198,11 +2637,13 @@ function verDetalle(id) {
                         </table>
                     </div>
                     
-                    ${htmlVinculadas}
+                    ${htmlTablaContenido}
                     
-                    <!-- PROVEEDOR -->
+                    <!-- PROVEEDOR/SOLICITANTE -->
                     <div style="margin: 8px 0;">
-                        <div style="background: #d01f34; color: white; padding: 4px; font-weight: bold; font-size: 9px;">PROVEEDOR</div>
+                        <div style="background: #d01f34; color: white; padding: 4px; font-weight: bold; font-size: 9px;">
+                            ${solicitud.tipoFormato === 'cajaChica' ? 'SOLICITANTE' : 'PROVEEDOR'}
+                        </div>
                         <div style="padding: 6px; border: 1px solid #606060; border-top: none; background: #fafafa;">
                             <table style="width: 100%; font-size: 8px; table-layout: fixed;">
                                 <colgroup>
@@ -1213,6 +2654,7 @@ function verDetalle(id) {
                                     <td style="padding: 2px; vertical-align: top;"><strong>NOMBRE:</strong></td>
                                     <td style="padding: 2px; word-wrap: break-word;">${proveedor ? proveedor.nombre : solicitud.proveedor}</td>
                                 </tr>
+                                ${solicitud.tipoFormato !== 'cajaChica' ? `
                                 <tr>
                                     <td style="padding: 2px; vertical-align: top;"><strong>RAZÓN SOCIAL:</strong></td>
                                     <td style="padding: 2px; word-wrap: break-word;">${proveedor ? proveedor.razonSocial : solicitud.proveedor}</td>
@@ -1221,6 +2663,7 @@ function verDetalle(id) {
                                     <td style="padding: 2px; vertical-align: top;"><strong>RFC:</strong></td>
                                     <td style="padding: 2px;">${proveedor ? proveedor.rfc : 'N/A'}</td>
                                 </tr>
+                                ` : ''}
                                 <tr>
                                     <td style="padding: 2px; vertical-align: top;"><strong>BANCO:</strong></td>
                                     <td style="padding: 2px;">${solicitud.banco}</td>
@@ -1233,15 +2676,16 @@ function verDetalle(id) {
                                     <td style="padding: 2px; vertical-align: top;"><strong>CLABE:</strong></td>
                                     <td style="padding: 2px;">${solicitud.clabe}</td>
                                 </tr>
-                                <tr>
-                                    <td style="padding: 2px; vertical-align: top;"><strong>CIUDAD:</strong></td>
-                                    <td style="padding: 2px;">${solicitud.ciudad}</td>
+                                <!-- <tr> -->
+                                <!--     <td style="padding: 2px; vertical-align: top;"><strong>CIUDAD:</strong></td> -->
+                                <!--     <td style="padding: 2px;">${solicitud.ciudad}</td> -->
                                 </tr>
                             </table>
                         </div>
                     </div>
                     
-                    <!-- CONCEPTO -->
+                    ${solicitud.tipoFormato !== 'cajaChica' ? `
+                    <!-- CONCEPTO (solo para formato normal) -->
                     <div style="margin: 8px 0;">
                         <div style="background: #d01f34; color: white; padding: 4px; font-weight: bold; font-size: 9px;">CONCEPTO</div>
                         <div style="padding: 6px; border: 1px solid #606060; border-top: none; background: #fafafa;">
@@ -1276,6 +2720,7 @@ function verDetalle(id) {
                             </table>
                         </div>
                     </div>
+                    ` : ''}
                     
                     <!-- MONTOS -->
                     <div style="margin: 8px 0;">
@@ -1290,6 +2735,7 @@ function verDetalle(id) {
                                     <td style="padding: 2px; vertical-align: top;"><strong>Subtotal:</strong></td>
                                     <td style="padding: 2px;">$${solicitud.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
                                 </tr>
+                                ${solicitud.tipoFormato !== 'cajaChica' ? `
                                 <tr>
                                     <td style="padding: 2px; vertical-align: top;"><strong>Descuento:</strong></td>
                                     <td style="padding: 2px;">$${solicitud.descuento.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
@@ -1298,8 +2744,9 @@ function verDetalle(id) {
                                     <td style="padding: 2px; vertical-align: top;"><strong>Impuestos (${solicitud.porcentajeImpuestos || 0}%):</strong></td>
                                     <td style="padding: 2px;">$${(solicitud.impuestos || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
                                 </tr>
+                                ` : ''}
                                 <tr style="font-weight: bold; font-size: 9px; background: #f0f0f0;">
-                                    <td style="padding: 3px; vertical-align: top;"><strong>TOTAL A PAGAR:</strong></td>
+                                    <td style="padding: 3px; vertical-align: top;"><strong>TOTAL A ${solicitud.tipoFormato === 'cajaChica' ? 'REEMBOLSAR' : 'PAGAR'}:</strong></td>
                                     <td style="padding: 3px;">$${solicitud.total.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
                                 </tr>
                             </table>
@@ -1624,9 +3071,9 @@ function descargarPDF(id) {
     doc.text('CLABE:', 25, yPos);
     doc.text(solicitud.clabe, 50, yPos);
     
-    yPos += 7;
-    doc.text('Ciudad:', 25, yPos);
-    doc.text(solicitud.ciudad, 50, yPos);
+    // yPos += 7;
+    // doc.text('Ciudad:', 25, yPos);
+    // doc.text(solicitud.ciudad, 50, yPos);
 
     yPos += 15;
     doc.setDrawColor(colorPrincipal[0], colorPrincipal[1], colorPrincipal[2]);
@@ -1783,7 +3230,159 @@ function gestionarArchivos(solicitudId) {
     modal.style.display = 'block';
 }
 
-function subirArchivos() {
+// Abrir modal para subir factura (PDF y XML) a una solicitud normal
+function subirFacturaSolicitud(solicitudId) {
+    const solicitud = solicitudes.find(s => s.id === solicitudId);
+    if (!solicitud) {
+        alert('Solicitud no encontrada');
+        return;
+    }
+    
+    if (solicitud.tipoFormato === 'cajaChica') {
+        alert('Las solicitudes de reembolso de caja chica tienen sus archivos en cada gasto');
+        return;
+    }
+    
+    // Usar el mismo modal de archivos existente
+    solicitudActualArchivos = solicitudId;
+    
+    const modal = document.getElementById('archivosModal');
+    const info = document.getElementById('archivosSolicitudInfo');
+    const lista = document.getElementById('listaArchivos');
+    
+    info.innerHTML = `
+        <p><strong>Solicitud:</strong> ${solicitud.numero}</p>
+        <p><strong>Concepto:</strong> ${solicitud.conceptoGeneral}</p>
+        <p style="color: #17a2b8; font-weight: 600; margin-top: 10px;">
+            📄 Subir Factura (PDF y XML)
+        </p>
+    `;
+    
+    if (!solicitud.archivos) {
+        solicitud.archivos = [];
+    }
+    
+    const puedeDescargar = tienePermiso('descargar_archivos');
+    
+    let htmlArchivos = '<h4>Archivos Subidos:</h4>';
+    
+    if (solicitud.archivos.length === 0) {
+        htmlArchivos += '<p style="color: #999;">No hay archivos subidos</p>';
+    } else {
+        solicitud.archivos.forEach((archivo, index) => {
+            const extension = obtenerExtensionDeArchivo(archivo.nombre).toLowerCase();
+            const esPDF = extension === 'pdf' || archivo.tipo === 'application/pdf';
+            const esXML = extension === 'xml' || archivo.tipo === 'application/xml' || archivo.tipo === 'text/xml';
+            const esImagen = archivo.tipo?.startsWith('image/');
+            
+            let icono = '📄';
+            if (esPDF) icono = '📕';
+            else if (esXML) icono = '📃';
+            else if (esImagen) icono = '🖼️';
+            
+            htmlArchivos += `
+                <div class="archivo-item">
+                    <span>${icono} ${archivo.nombre} <small style="color: #999;">(${formatearFecha(archivo.fecha)})</small></span>
+                    <div style="display: flex; gap: 5px;">
+                        ${puedeDescargar ? `
+                            <button class="btn btn-secondary" onclick="descargarArchivo(${solicitudId}, ${index})" 
+                                    style="padding: 5px 10px; font-size: 12px;">
+                                ↓ Descargar
+                            </button>
+                            <button class="btn btn-danger" onclick="eliminarArchivo(${solicitudId}, ${index})" 
+                                    style="padding: 5px 10px; font-size: 12px;">
+                                🗑 Eliminar
+                            </button>
+                        ` : '<span style="color: #999; font-size: 12px;">Solo admin/coordinador puede descargar</span>'}
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    lista.innerHTML = htmlArchivos;
+    modal.style.display = 'block';
+}
+
+// Descargar todos los archivos de una solicitud en ZIP
+async function descargarArchivosZip(solicitudId) {
+    const solicitud = solicitudes.find(s => s.id === solicitudId);
+    if (!solicitud) {
+        alert('Solicitud no encontrada');
+        return;
+    }
+    
+    const zip = new JSZip();
+    let totalArchivos = 0;
+    
+    try {
+        // Si es solicitud de caja chica, incluir archivos de gastos
+        if (solicitud.tipoFormato === 'cajaChica' && solicitud.gastosCajaChica) {
+            const gastosAutorizados = solicitud.gastosCajaChica.filter(g => g.autorizado);
+            
+            gastosAutorizados.forEach((gasto, index) => {
+                const numeroGasto = index + 1;
+                const prefijo = `Gasto_${numeroGasto}_${gasto.factura}`;
+                
+                // Agregar PDF/Imagen
+                if (gasto.archivoPDF) {
+                    const base64Data = gasto.archivoPDF.datos.split(',')[1];
+                    const extension = obtenerExtensionDeArchivo(gasto.archivoPDF.nombre);
+                    zip.file(`${prefijo}.${extension}`, base64Data, {base64: true});
+                    totalArchivos++;
+                }
+                
+                // Agregar XML
+                if (gasto.archivoXML) {
+                    const base64Data = gasto.archivoXML.datos.split(',')[1];
+                    zip.file(`${prefijo}.xml`, base64Data, {base64: true});
+                    totalArchivos++;
+                }
+            });
+        }
+        
+        // Agregar archivos adjuntos generales de la solicitud
+        if (solicitud.archivos && solicitud.archivos.length > 0) {
+            solicitud.archivos.forEach((archivo, index) => {
+                const base64Data = archivo.datos.split(',')[1];
+                const nombreArchivo = archivo.nombre || `archivo_${index + 1}`;
+                zip.file(`Adjuntos/${nombreArchivo}`, base64Data, {base64: true});
+                totalArchivos++;
+            });
+        }
+        
+        if (totalArchivos === 0) {
+            alert('No hay archivos para descargar en esta solicitud');
+            return;
+        }
+        
+        // Generar el ZIP
+        mostrarCargando(true);
+        const content = await zip.generateAsync({type: 'blob'});
+        mostrarCargando(false);
+        
+        // Descargar
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(content);
+        link.download = `${solicitud.numero}_archivos.zip`;
+        link.click();
+        
+        alert(`ZIP generado con ${totalArchivos} archivo(s)`);
+        
+    } catch (error) {
+        mostrarCargando(false);
+        console.error('Error al generar ZIP:', error);
+        alert('Error al generar el archivo ZIP');
+    }
+}
+
+// Función auxiliar para obtener extensión de archivo
+function obtenerExtensionDeArchivo(nombreArchivo) {
+    const partes = nombreArchivo.split('.');
+    return partes[partes.length - 1];
+}
+
+async function subirArchivos() {
     const input = document.getElementById('archivosFactura');
     const files = input.files;
     
@@ -1799,26 +3398,60 @@ function subirArchivos() {
         solicitud.archivos = [];
     }
     
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const reader = new FileReader();
-        
-        reader.onload = function(e) {
-            solicitud.archivos.push({
-                nombre: file.name,
-                tipo: file.type,
-                datos: e.target.result,
-                fecha: new Date().toISOString()
-                });
+    mostrarCargando(true);
+    
+    try {
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
             
-            if (i === files.length - 1) {
-                alert(`${files.length} archivo(s) subido(s) exitosamente`);
-                gestionarArchivos(solicitudActualArchivos);
-                input.value = '';
+            // Validar tamaño (máximo 10MB)
+            const maxSize = 10 * 1024 * 1024;
+            if (file.size > maxSize) {
+                alert(`El archivo "${file.name}" es demasiado grande. Tamaño máximo: 10 MB`);
+                continue;
             }
-        };
+            
+            // Leer archivo
+            const reader = new FileReader();
+            const archivoPromise = new Promise((resolve) => {
+                reader.onload = function(e) {
+                    resolve({
+                        nombre: file.name,
+                        tipo: file.type,
+                        datos: e.target.result,
+                        fecha: new Date().toISOString()
+                    });
+                };
+                reader.readAsDataURL(file);
+            });
+            
+            const archivo = await archivoPromise;
+            solicitud.archivos.push(archivo);
+        }
         
-        reader.readAsDataURL(file);
+        // Guardar cambios
+        await actualizarSolicitudSupabase(solicitud);
+        
+        // Actualizar array local
+        const index = solicitudes.findIndex(s => s.id === solicitudActualArchivos);
+        if (index !== -1) {
+            solicitudes[index] = { ...solicitud };
+        }
+        
+        mostrarCargando(false);
+        
+        alert(`${files.length} archivo(s) subido(s) exitosamente`);
+        
+        // Refrescar modal y tabla
+        subirFacturaSolicitud(solicitudActualArchivos);
+        cargarSolicitudes();
+        
+        input.value = '';
+        
+    } catch (error) {
+        mostrarCargando(false);
+        console.error('Error al subir archivos:', error);
+        alert('Error al subir archivos: ' + error.message);
     }
 }
 
@@ -1833,15 +3466,41 @@ function descargarArchivo(solicitudId, archivoIndex) {
     link.click();
 }
 
-function eliminarArchivo(solicitudId, archivoIndex) {
+async function eliminarArchivo(solicitudId, archivoIndex) {
     if (!confirm('¿Está seguro de eliminar este archivo?')) return;
     
     const solicitud = solicitudes.find(s => s.id === solicitudId);
     if (!solicitud || !solicitud.archivos) return;
     
-    solicitud.archivos.splice(archivoIndex, 1);
-    gestionarArchivos(solicitudId);
-    alert('Archivo eliminado exitosamente');
+    const nombreArchivo = solicitud.archivos[archivoIndex].nombre;
+    
+    mostrarCargando(true);
+    
+    try {
+        solicitud.archivos.splice(archivoIndex, 1);
+        
+        // Guardar cambios
+        await actualizarSolicitudSupabase(solicitud);
+        
+        // Actualizar array local
+        const index = solicitudes.findIndex(s => s.id === solicitudId);
+        if (index !== -1) {
+            solicitudes[index] = { ...solicitud };
+        }
+        
+        mostrarCargando(false);
+        
+        // Refrescar modal y tabla
+        subirFacturaSolicitud(solicitudActualArchivos);
+        cargarSolicitudes();
+        
+        alert(`Archivo "${nombreArchivo}" eliminado exitosamente`);
+        
+    } catch (error) {
+        mostrarCargando(false);
+        console.error('Error al eliminar archivo:', error);
+        alert('Error al eliminar archivo: ' + error.message);
+    }
 }
 
 function cerrarModalArchivos() {
@@ -1994,12 +3653,15 @@ function cargarProveedores() {
     
     beneficiarios.forEach(proveedor => {
         const row = tbody.insertRow();
+        const tipoTexto = proveedor.tipo === 'jefe_sucursal' ? 'Jefe de Sucursal' : 'Proveedor';
+        
         row.innerHTML = `
             <td>
                 <strong>${proveedor.nombre}</strong>
                 ${proveedor.razonSocial ? `<br><small style="color: #666;">${proveedor.razonSocial}</small>` : ''}
             </td>
             <td>${proveedor.rfc || 'N/A'}</td>
+            <td><span style="padding: 4px 8px; background: ${proveedor.tipo === 'jefe_sucursal' ? '#e3f2fd' : '#fff3e0'}; border-radius: 4px; font-size: 12px;">${tipoTexto}</span></td>
             <td>${proveedor.banco}</td>
             <td>${proveedor.cuenta}</td>
             <td>${proveedor.clabe}</td>
@@ -2084,6 +3746,7 @@ function mostrarFormularioProveedor(id = null) {
             document.getElementById('proveedorNombre').value = proveedor.nombre;
             document.getElementById('proveedorRazonSocial').value = proveedor.razonSocial || '';
             document.getElementById('proveedorRFC').value = proveedor.rfc || '';
+            document.getElementById('proveedorTipo').value = proveedor.tipo || 'proveedor';
             document.getElementById('proveedorBanco').value = proveedor.banco;
             document.getElementById('proveedorCuenta').value = proveedor.cuenta;
             document.getElementById('proveedorClabe').value = proveedor.clabe;
@@ -2125,9 +3788,13 @@ async function guardarProveedor(event) {
     const nombre = document.getElementById('proveedorNombre').value;
     const razonSocial = document.getElementById('proveedorRazonSocial').value;
     const rfc = document.getElementById('proveedorRFC').value.toUpperCase();
+    const tipo = document.getElementById('proveedorTipo').value;
     const banco = document.getElementById('proveedorBanco').value;
     const cuenta = document.getElementById('proveedorCuenta').value;
     const clabe = document.getElementById('proveedorClabe').value;
+    
+    // console.log('===== DEBUGGING GUARDAR PROVEEDOR =====');
+    // console.log('Tipo capturado:', tipo);
     
     try {
         if (editandoProveedor) {
@@ -2136,32 +3803,59 @@ async function guardarProveedor(event) {
                 proveedor.nombre = nombre;
                 proveedor.razonSocial = razonSocial;
                 proveedor.rfc = rfc;
+                proveedor.tipo = tipo;
                 proveedor.banco = banco;
                 proveedor.cuenta = cuenta;
                 proveedor.clabe = clabe;
-                await guardarBeneficiarioSupabase(proveedor);
+                
+                //console.log('Proveedor actualizado:', proveedor);
+                
+                if (usarSupabase) {
+                    await guardarBeneficiarioSupabase(proveedor);
+                    await cargarDatosDesdeSupabase(); // Recargar para obtener datos actualizados
+                } else {
+                    guardarDatosLocalStorage();
+                }
             }
         } else {
             const nuevoProveedor = {
+                // NO incluir ID, lo genera Supabase automáticamente
                 nombre: nombre,
                 razonSocial: razonSocial,
                 rfc: rfc,
+                tipo: tipo,
                 banco: banco,
                 cuenta: cuenta,
                 clabe: clabe,
                 csf: null
             };
-            const proveedorGuardado = await guardarBeneficiarioSupabase(nuevoProveedor);
-            beneficiarios.push(proveedorGuardado);
+            
+            //console.log('Nuevo proveedor a guardar:', nuevoProveedor);
+            
+            if (usarSupabase) {
+                const proveedorGuardado = await guardarBeneficiarioSupabase(nuevoProveedor);
+                //console.log('Proveedor guardado desde Supabase:', proveedorGuardado);
+                await cargarDatosDesdeSupabase(); // Recargar para obtener la lista actualizada
+            } else {
+                // Para localStorage, generar un ID único
+                nuevoProveedor.id = Date.now();
+                beneficiarios.push(nuevoProveedor);
+                guardarDatosLocalStorage();
+            }
         }
         
         cerrarModalProveedor();
-        await cargarDatosDesdeSupabase();
+        
         cargarProveedores();
         cargarBeneficiariosSelect();
+        cargarBeneficiariosSelectCajaChica();
+        
+        console.log('Beneficiarios después de guardar:', beneficiarios);
+        
         alert(editandoProveedor ? 'Proveedor actualizado exitosamente' : 'Proveedor creado exitosamente');
     } catch (error) {
-        alert('Error al guardar proveedor');
+        console.error('ERROR al guardar:', error);
+        alert('Error al guardar proveedor: ' + error.message);
     }
 }
 
@@ -2367,18 +4061,26 @@ async function guardarEmpresa(event) {
                 empresa.razonSocial = razonSocial;
                 empresa.rfc = rfc;
                 await guardarEmpresaSupabase(empresa);
+                await cargarDatosDesdeSupabase();
             }
         } else {
             const nuevaEmpresa = {
+                // NO incluir ID
                 razonSocial: razonSocial,
                 rfc: rfc
             };
-            const empresaGuardada = await guardarEmpresaSupabase(nuevaEmpresa);
-            empresas.push(empresaGuardada);
+            
+            if (usarSupabase) {
+                await guardarEmpresaSupabase(nuevaEmpresa);
+                await cargarDatosDesdeSupabase();
+            } else {
+                nuevaEmpresa.id = Date.now();
+                empresas.push(nuevaEmpresa);
+                guardarDatosLocalStorage();
+            }
         }
         
         cerrarModalEmpresa();
-        await cargarDatosDesdeSupabase();
         cargarEmpresas();
         cargarEmpresasSelect();
         alert(editandoEmpresa ? 'Empresa actualizada exitosamente' : 'Empresa creada exitosamente');
@@ -2431,9 +4133,15 @@ function cargarDatos() {
     const beneficiariosGuardados = localStorage.getItem('beneficiarios');
     if (beneficiariosGuardados) {
         try {
-            beneficiarios = JSON.parse(beneficiariosGuardados);
+            const beneficiariosTemp = JSON.parse(beneficiariosGuardados);
+            // Asegurar que todos tengan la propiedad tipo
+            beneficiarios = beneficiariosTemp.map(b => ({
+                ...b,
+                tipo: b.tipo || 'proveedor' // <-- LÍNEA CRÍTICA
+            }));
+            //console.log('Beneficiarios cargados desde localStorage:', beneficiarios);
         } catch (e) {
-            console.error('Error al cargar beneficiarios:', e);
+            //console.error('Error al cargar beneficiarios:', e);
         }
     }
     
@@ -2890,4 +4598,66 @@ function calcularMontoConceptoPago() {
     
     // Recalcular el total
     calcularTotal();
+}
+
+function cargarDatosLocalStorage() {
+    cargarDatos(); // Llama a la función existente
+}
+
+function guardarDatosLocalStorage() {
+    try {
+        localStorage.setItem('solicitudes', JSON.stringify(solicitudes));
+        localStorage.setItem('contadores', JSON.stringify(contadores));
+        localStorage.setItem('beneficiarios', JSON.stringify(beneficiarios));
+        localStorage.setItem('empresas', JSON.stringify(empresas));
+        //console.log('Datos guardados en localStorage correctamente');
+    } catch (e) {
+        //console.error('Error al guardar en localStorage:', e);
+    }
+}
+
+async function descargarArchivosGastosZip(solicitudId) {
+    const solicitud = solicitudes.find(s => s.id === solicitudId);
+    if (!solicitud || !solicitud.gastosCajaChica) {
+        alert('No hay archivos para descargar');
+        return;
+    }
+    
+    const gastosAutorizados = solicitud.gastosCajaChica.filter(g => g.autorizado);
+    const archivosParaDescargar = [];
+    
+    gastosAutorizados.forEach((gasto, index) => {
+        if (gasto.archivoPDF) {
+            archivosParaDescargar.push({
+                nombre: `${index + 1}_${gasto.factura}_${gasto.archivoPDF.nombre}`,
+                datos: gasto.archivoPDF.datos
+            });
+        }
+        if (gasto.archivoXML) {
+            archivosParaDescargar.push({
+                nombre: `${index + 1}_${gasto.factura}_${gasto.archivoXML.nombre}`,
+                datos: gasto.archivoXML.datos
+            });
+        }
+    });
+    
+    if (archivosParaDescargar.length === 0) {
+        alert('No hay archivos adjuntos en los gastos autorizados');
+        return;
+    }
+    
+    // Nota: La funcionalidad de ZIP requiere una librería externa
+    // Por ahora, descargar archivos individualmente
+    if (confirm(`Se descargarán ${archivosParaDescargar.length} archivos. ¿Desea continuar?`)) {
+        archivosParaDescargar.forEach((archivo, index) => {
+            setTimeout(() => {
+                const link = document.createElement('a');
+                link.href = archivo.datos;
+                link.download = archivo.nombre;
+                link.click();
+            }, index * 500); // Retraso de 500ms entre descargas
+        });
+        
+        alert('Descargando archivos...');
+    }
 }

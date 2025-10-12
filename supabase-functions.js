@@ -5,48 +5,75 @@
 // Cargar todos los datos desde Supabase
 async function cargarDatosDesdeSupabase() {
     if (!usarSupabase) {
-        cargarDatosDesdeLocalStorage();
+        cargarDatosLocalStorage();
         return;
     }
-
+    
     try {
-        // Mostrar indicador de carga
         mostrarCargando(true);
-
+        
         // Cargar empresas
         const { data: empresasData, error: empresasError } = await supabaseClient
             .from('empresas')
-            .select('*');
+            .select('*')
+            .order('id', { ascending: true });
+        
         if (empresasError) throw empresasError;
-        empresas = empresasData.map(e => ({
-            id: e.id,
-            razonSocial: e.razon_social,
-            rfc: e.rfc
-        })) || [];
-
+        
+        if (empresasData && empresasData.length > 0) {
+            empresas = empresasData.map(e => ({
+                id: e.id,
+                razonSocial: e.razon_social,
+                rfc: e.rfc
+            }));
+        }
+        
         // Cargar beneficiarios
         const { data: beneficiariosData, error: beneficiariosError } = await supabaseClient
             .from('beneficiarios')
-            .select('*');
+            .select('*')
+            .order('id', { ascending: true });
+        
         if (beneficiariosError) throw beneficiariosError;
-        beneficiarios = beneficiariosData.map(b => ({
-            ...b,
-            razonSocial: b.razon_social,
-            csf: b.csf_url ? {
-                nombre: b.csf_nombre,
-                datos: b.csf_url,
-                fecha: b.csf_fecha
-            } : null
-        })) || [];
-
+        
+        if (beneficiariosData && beneficiariosData.length > 0) {
+            beneficiarios = beneficiariosData.map(b => ({
+                id: b.id,
+                nombre: b.nombre,
+                razonSocial: b.razon_social,
+                rfc: b.rfc,
+                tipo: b.tipo || 'proveedor', // <-- ASEGÚRATE QUE ESTA LÍNEA ESTÉ
+                banco: b.banco,
+                cuenta: b.cuenta,
+                clabe: b.clabe,
+                csf: b.csf
+            }));
+        }
+        
         // Cargar solicitudes
         const { data: solicitudesData, error: solicitudesError } = await supabaseClient
             .from('solicitudes')
             .select('*')
-            .order('created_at', { ascending: false });
+            .order('id', { ascending: false });
+        
         if (solicitudesError) throw solicitudesError;
         
-        solicitudes = solicitudesData.map(s => ({
+        if (solicitudesData && solicitudesData.length > 0) {
+    solicitudes = solicitudesData.map(s => {
+        // Parsear gastos_caja_chica si viene como string
+        let gastosCajaChica = null;
+        if (s.gastos_caja_chica) {
+            try {
+                gastosCajaChica = typeof s.gastos_caja_chica === 'string' 
+                    ? JSON.parse(s.gastos_caja_chica) 
+                    : s.gastos_caja_chica;
+            } catch (e) {
+                console.error('Error al parsear gastos_caja_chica para solicitud', s.id, ':', e);
+                gastosCajaChica = null;
+            }
+        }
+        
+        return {
             id: s.id,
             numero: s.numero,
             numeroConsecutivo: s.numero_consecutivo,
@@ -55,51 +82,42 @@ async function cargarDatosDesdeSupabase() {
             beneficiarioId: s.beneficiario_id,
             proveedor: s.proveedor,
             conceptoGeneral: s.concepto_general,
-            montoConceptoGeneral: parseFloat(s.monto_concepto_general) || 0,
+            montoConceptoGeneral: s.monto_concepto_general,
             conceptoPago: s.concepto_pago,
             claveAnuncio: s.clave_anuncio,
-            subtotal: parseFloat(s.subtotal),
-            descuento: parseFloat(s.descuento) || 0,
-            porcentajeImpuestos: parseFloat(s.porcentaje_impuestos) || 16,
-            impuestos: parseFloat(s.impuestos),
-            total: parseFloat(s.total),
+            subtotal: s.subtotal,
+            descuento: s.descuento,
+            porcentajeImpuestos: s.porcentaje_impuestos,
+            impuestos: s.impuestos,
+            total: s.total,
             banco: s.banco,
             cuenta: s.cuenta,
             clabe: s.clabe,
             ciudad: s.ciudad,
             estado: s.estado,
-            pagada: s.pagada,
             fechaSolicitud: s.fecha_solicitud,
             fechaAutorizacion: s.fecha_autorizacion,
+            solicitudesVinculadas: s.solicitudes_vinculadas || [],
+            archivos: s.archivos || [],
+            comprobantePago: s.comprobante_pago,
+            pagada: s.pagada || false,
             fechaPago: s.fecha_pago,
             creadoPor: s.creado_por,
-            solicitudesVinculadas: s.solicitudes_vinculadas ? JSON.parse(s.solicitudes_vinculadas) : [],
-            comprobantePago: s.comprobante_pago_url ? {
-                nombre: s.comprobante_pago_nombre,
-                datos: s.comprobante_pago_url,
-                tipo: s.comprobante_pago_nombre.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-                fecha: s.fecha_pago || s.created_at
-            } : null,
-            archivos: []
-        })) || [];
-
-        // Cargar contadores
-        const { data: contadoresData, error: contadoresError } = await supabaseClient
-            .from('contadores')
-            .select('*');
-        if (contadoresError) throw contadoresError;
+            tipoFormato: s.tipo_formato || 'normal',
+            gastosCajaChica: gastosCajaChica  // ← USAR LA VARIABLE PARSEADA
+        };
+    });
+}
         
-        contadores = {};
-        contadoresData.forEach(c => {
-            contadores[c.sucursal] = c.contador;
-        });
-
+        // console.log('✅ Datos cargados desde Supabase correctamente');
+        // console.log('Beneficiarios cargados:', beneficiarios);
         mostrarCargando(false);
+        
     } catch (error) {
-        console.error('Error cargando datos:', error);
+        // console.error('❌ Error al cargar desde Supabase:', error);
+        // console.log('Usando localStorage como respaldo');
+        cargarDatosLocalStorage();
         mostrarCargando(false);
-        alert('Error al cargar datos. Usando datos locales.');
-        cargarDatosDesdeLocalStorage();
     }
 }
 
@@ -150,7 +168,11 @@ async function guardarSolicitudSupabase(solicitud) {
             pagada: solicitud.pagada || false,
             fecha_solicitud: solicitud.fechaSolicitud,
             creado_por: solicitud.creadoPor,
-            solicitudes_vinculadas: JSON.stringify(solicitud.solicitudesVinculadas || [])
+            solicitudes_vinculadas: solicitud.solicitudesVinculadas ? JSON.stringify(solicitud.solicitudesVinculadas) : null,
+            
+            // ⭐ CAMPOS CRÍTICOS - ASEGÚRATE QUE ESTÉN ⭐
+            tipo_formato: solicitud.tipoFormato || 'normal',
+            gastos_caja_chica: solicitud.gastosCajaChica ? JSON.stringify(solicitud.gastosCajaChica) : null
         };
 
         const { data, error } = await supabaseClient
@@ -158,7 +180,10 @@ async function guardarSolicitudSupabase(solicitud) {
             .insert([solicitudDB])
             .select();
         
-        if (error) throw error;
+        if (error) {
+            console.error('Error de Supabase:', error);
+            throw error;
+        }
 
         // Actualizar contador
         await supabaseClient
@@ -181,6 +206,8 @@ async function actualizarSolicitudSupabase(solicitud) {
     }
 
     try {
+        console.log('Actualizando en Supabase:', solicitud.id);
+        
         const solicitudDB = {
             empresa_id: solicitud.empresaId,
             beneficiario_id: solicitud.beneficiarioId,
@@ -203,7 +230,14 @@ async function actualizarSolicitudSupabase(solicitud) {
             fecha_autorizacion: solicitud.fechaAutorizacion,
             fecha_pago: solicitud.fechaPago,
             comprobante_pago_url: solicitud.comprobantePago?.datos || null,
-            comprobante_pago_nombre: solicitud.comprobantePago?.nombre || null
+            comprobante_pago_nombre: solicitud.comprobantePago?.nombre || null,
+            
+            // ARCHIVOS
+            archivos: solicitud.archivos ? JSON.stringify(solicitud.archivos) : null,
+            
+            // CAMPOS PARA CAJA CHICA
+            tipo_formato: solicitud.tipoFormato || 'normal',
+            gastos_caja_chica: solicitud.gastosCajaChica ? JSON.stringify(solicitud.gastosCajaChica) : null
         };
 
         const { error } = await supabaseClient
@@ -211,7 +245,13 @@ async function actualizarSolicitudSupabase(solicitud) {
             .update(solicitudDB)
             .eq('id', solicitud.id);
         
-        if (error) throw error;
+        if (error) {
+            console.error('Error de Supabase al actualizar:', error);
+            throw error;
+        }
+        
+        console.log('✓ Actualización en Supabase exitosa');
+        
     } catch (error) {
         console.error('Error actualizando solicitud:', error);
         throw error;
@@ -219,38 +259,44 @@ async function actualizarSolicitudSupabase(solicitud) {
 }
 
 // Guardar empresa en Supabase
-// Guardar empresa en Supabase
 async function guardarEmpresaSupabase(empresa) {
-    if (!usarSupabase) {
-        guardarDatosLocalStorage();
-        return empresa;
-    }
-
     try {
-        const empresaDB = {
-            razon_social: empresa.razonSocial,
-            rfc: empresa.rfc
-        };
-
-        if (empresa.id) {
-            // Actualizar
-            const { error } = await supabaseClient
-                .from('empresas')
-                .update(empresaDB)
-                .eq('id', empresa.id);
-            if (error) throw error;
-            return empresa;
-        } else {
-            // Insertar
+        if (empresa.id && empresa.id < 2147483647) {
+            // Actualizar empresa existente
             const { data, error } = await supabaseClient
                 .from('empresas')
-                .insert([empresaDB])
-                .select();
+                .update({
+                    razon_social: empresa.razonSocial,
+                    rfc: empresa.rfc
+                })
+                .eq('id', empresa.id)
+                .select()
+                .single();
+            
             if (error) throw error;
-            return { 
-                id: data[0].id, 
-                razonSocial: data[0].razon_social, 
-                rfc: data[0].rfc 
+            
+            return {
+                id: data.id,
+                razonSocial: data.razon_social,
+                rfc: data.rfc
+            };
+        } else {
+            // Insertar nueva empresa (sin ID)
+            const { data, error } = await supabaseClient
+                .from('empresas')
+                .insert([{
+                    razon_social: empresa.razonSocial,
+                    rfc: empresa.rfc
+                }])
+                .select()
+                .single();
+            
+            if (error) throw error;
+            
+            return {
+                id: data.id,
+                razonSocial: data.razon_social,
+                rfc: data.rfc
             };
         }
     } catch (error) {
@@ -280,40 +326,71 @@ async function eliminarEmpresaSupabase(id) {
 
 // Guardar beneficiario en Supabase
 async function guardarBeneficiarioSupabase(beneficiario) {
-    if (!usarSupabase) {
-        guardarDatosLocalStorage();
-        return beneficiario;
-    }
-
     try {
-        const beneficiarioDB = {
-            nombre: beneficiario.nombre,
-            razon_social: beneficiario.razonSocial,
-            rfc: beneficiario.rfc,
-            banco: beneficiario.banco,
-            cuenta: beneficiario.cuenta,
-            clabe: beneficiario.clabe,
-            csf_url: beneficiario.csf?.datos || null,
-            csf_nombre: beneficiario.csf?.nombre || null,
-            csf_fecha: beneficiario.csf?.fecha || null
-        };
-
-        if (beneficiario.id) {
-            // Actualizar
-            const { error } = await supabaseClient
-                .from('beneficiarios')
-                .update(beneficiarioDB)
-                .eq('id', beneficiario.id);
-            if (error) throw error;
-            return beneficiario;
-        } else {
-            // Insertar
+        // Si el beneficiario ya tiene un ID válido de Supabase (menor a 2147483647)
+        if (beneficiario.id && beneficiario.id < 2147483647) {
+            // Actualizar beneficiario existente
             const { data, error } = await supabaseClient
                 .from('beneficiarios')
-                .insert([beneficiarioDB])
-                .select();
+                .update({
+                    nombre: beneficiario.nombre,
+                    razon_social: beneficiario.razonSocial,
+                    rfc: beneficiario.rfc,
+                    tipo: beneficiario.tipo || 'proveedor',
+                    banco: beneficiario.banco,
+                    cuenta: beneficiario.cuenta,
+                    clabe: beneficiario.clabe,
+                    csf: beneficiario.csf
+                })
+                .eq('id', beneficiario.id)
+                .select()
+                .single();
+            
             if (error) throw error;
-            return { ...beneficiario, id: data[0].id };
+            
+            return {
+                id: data.id,
+                nombre: data.nombre,
+                razonSocial: data.razon_social,
+                rfc: data.rfc,
+                tipo: data.tipo,
+                banco: data.banco,
+                cuenta: data.cuenta,
+                clabe: data.clabe,
+                csf: data.csf
+            };
+        } else {
+            // Insertar nuevo beneficiario (sin especificar ID, Supabase lo genera)
+            const { data, error } = await supabaseClient
+                .from('beneficiarios')
+                .insert([{
+                    nombre: beneficiario.nombre,
+                    razon_social: beneficiario.razonSocial,
+                    rfc: beneficiario.rfc,
+                    tipo: beneficiario.tipo || 'proveedor',
+                    banco: beneficiario.banco,
+                    cuenta: beneficiario.cuenta,
+                    clabe: beneficiario.clabe,
+                    csf: beneficiario.csf
+                }])
+                .select()
+                .single();
+            
+            if (error) throw error;
+            
+            console.log('✅ Beneficiario guardado en Supabase:', data);
+            
+            return {
+                id: data.id,
+                nombre: data.nombre,
+                razonSocial: data.razon_social,
+                rfc: data.rfc,
+                tipo: data.tipo,
+                banco: data.banco,
+                cuenta: data.cuenta,
+                clabe: data.clabe,
+                csf: data.csf
+            };
         }
     } catch (error) {
         console.error('Error guardando beneficiario:', error);

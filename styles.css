@@ -293,12 +293,27 @@ body {
     box-shadow: var(--shadow-sm);
 }
 
+/* ============================================
+   TABLAS GENERALES
+   ============================================ */
 table {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
     background: white;
+}
+
+/* SOLO las tablas en contenedores con scroll necesitan min-width */
+.table-container table {
     min-width: 900px;
+}
+
+/* Las tablas dentro del modal de detalle NO deben tener min-width */
+#contenidoImprimible table {
+    min-width: unset !important;
+    width: 100% !important;
+    table-layout: fixed !important;
+    font-size: 8px !important;
 }
 
 thead {
@@ -401,7 +416,7 @@ tbody tr:last-child td:last-child {
     padding: var(--spacing-lg);
     border-radius: var(--radius-lg);
     width: 95%;
-    max-width: 700px;
+    max-width: 850px;
     max-height: 85vh;
     overflow-y: auto;
     box-shadow: var(--shadow-lg);
@@ -819,4 +834,432 @@ hr {
 #solicitudesTable tbody tr:hover {
     background: var(--light-gray);
     cursor: pointer;
+}
+
+/* ============================================
+   TOGGLE DE FORMATO
+   ============================================ */
+.formato-toggle {
+    display: flex;
+    gap: 0;
+    background: var(--light-gray);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.btn-toggle {
+    background: transparent;
+    color: var(--text-color);
+    border: none;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.btn-toggle:hover {
+    background: rgba(0,0,0,0.05);
+}
+
+.btn-toggle.active {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* ============================================
+   TABLA DE GASTOS CAJA CHICA
+   ============================================ */
+.section-5 {
+    background: #f3e5f5;
+    border-color: #9c27b0;
+}
+
+.tabla-gastos {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: white;
+    margin-top: 15px;
+}
+
+.tabla-gastos thead {
+    background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
+}
+
+.tabla-gastos th {
+    padding: 12px 10px;
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+}
+
+.tabla-gastos td {
+    padding: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tabla-gastos tbody tr:hover {
+    background: #f9f9f9;
+}
+
+.tabla-gastos input[type="text"],
+.tabla-gastos input[type="date"],
+.tabla-gastos input[type="number"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+}
+
+.tabla-gastos input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.tabla-gastos tfoot td {
+    border-top: 3px solid var(--primary-color);
+    border-bottom: none;
+}
+
+@media (max-width: 768px) {
+    .formato-toggle {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .btn-toggle {
+        width: 100%;
+    }
+    
+    .tabla-gastos {
+        font-size: 11px;
+    }
+    
+    .tabla-gastos th,
+    .tabla-gastos td {
+        padding: 6px 4px;
+    }
+}
+
+/* ============================================
+   ARCHIVOS EN TABLA DE GASTOS
+   ============================================ */
+.tabla-gastos input[type="file"] {
+    font-size: 11px;
+    padding: 4px;
+    cursor: pointer;
+}
+
+.archivo-status {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 4px;
+    text-align: center;
+    width: 100%;
+}
+
+.archivo-status.pendiente {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.archivo-status.cargado {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+    word-break: break-word;
+}
+
+.btn-ver-archivo {
+    padding: 3px 8px;
+    font-size: 10px;
+    background: #17a2b8;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 4px;
+}
+
+.btn-ver-archivo:hover {
+    background: #138496;
+}
+
+@media (max-width: 992px) {
+    .tabla-gastos {
+        display: block;
+        overflow-x: auto;
+    }
+}
+
+/* ============================================
+   AUTOCOMPLETADO DE PROVEEDORES
+   ============================================ */
+.autocomplete-container {
+    position: relative;
+    width: 100%;
+}
+
+.autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    max-height: 200px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-top: none;
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    display: none;
+}
+
+.autocomplete-list.active {
+    display: block;
+}
+
+.autocomplete-item {
+    padding: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.2s;
+}
+
+.autocomplete-item:hover {
+    background: #f8f9fa;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-item strong {
+    color: var(--primary-color);
+}
+
+.autocomplete-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.autocomplete-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.autocomplete-list::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+.autocomplete-list::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* ============================================
+   BOTONES DE ACCIÓN PARA ARCHIVOS DE GASTOS
+   ============================================ */
+.btn-accion-archivo {
+    padding: 4px 8px;
+    font-size: 16px;
+    background: #17a2b8;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex: 1;
+}
+
+.btn-accion-archivo:hover {
+    background: #138496;
+    transform: scale(1.05);
+}
+
+.btn-accion-archivo.btn-eliminar {
+    background: #c44545;
+}
+
+.btn-accion-archivo.btn-eliminar:hover {
+    background: #a33838;
+}
+
+/* ============================================
+   CHECKBOX AUTORIZADO (VERDE CON PALOMITA)
+   ============================================ */
+.checkbox-autorizado {
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background: white;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.checkbox-autorizado:checked {
+    background: #2d7a4a;
+    border-color: #2d7a4a;
+}
+
+.checkbox-autorizado:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.checkbox-autorizado:hover {
+    border-color: #2d7a4a;
+    box-shadow: 0 0 5px rgba(45, 122, 74, 0.3);
+}
+
+.checkbox-autorizado:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(45, 122, 74, 0.2);
+}
+
+/* ============================================
+   FIX DEFINITIVO PARA MODAL DE DETALLE
+   ============================================ */
+
+/* Ampliar modal solo para detalle */
+#detalleModal .modal-content {
+    max-width: 850px;
+}
+
+/* Contenedor imprimible */
+#contenidoImprimible {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+/* Tablas dentro del detalle - sin min-width */
+#contenidoImprimible table {
+    min-width: unset !important;
+    width: 100% !important;
+    table-layout: fixed !important;
+}
+
+/* Ajustar tamaño de fuente según el contenido */
+#contenidoImprimible th,
+#contenidoImprimible td {
+    font-size: 8px !important;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    padding: 3px !important;
+}
+
+/* Headers de tabla más compactos */
+#contenidoImprimible thead th {
+    font-size: 7px !important;
+    padding: 2px !important;
+    line-height: 1.2;
+}
+
+/* Distribución de columnas para tabla de pagos */
+#contenidoImprimible table colgroup col:nth-child(1) {
+    width: 15%;
+}
+
+#contenidoImprimible table colgroup col:nth-child(2) {
+    width: 20%;
+}
+
+#contenidoImprimible table colgroup col:nth-child(3) {
+    width: 35%;
+}
+
+#contenidoImprimible table colgroup col:nth-child(4) {
+    width: 20%;
+}
+
+#contenidoImprimible table colgroup col:nth-child(5) {
+    width: 10%;
+}
+
+/* Para impresión - restaurar diseño original */
+@media print {
+    #detalleModal .modal-content {
+        max-width: 100%;
+    }
+    
+    #contenidoImprimible {
+        max-width: 750px;
+    }
+    
+    #contenidoImprimible table {
+        page-break-inside: avoid;
+    }
+}
+
+/* Botón de cancelar edición */
+#btnCancelarEdicion {
+    background: #c44545;
+}
+
+#btnCancelarEdicion:hover {
+    background: #a33838;
+}
+
+/* ============================================
+   BOTONES DE ARCHIVOS SIMPLIFICADOS
+   ============================================ */
+.btn-archivos {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 10px;
+    font-weight: 600;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-archivos:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.btn-archivos.descargar {
+    background: #17a2b8;
+    color: white;
+}
+
+.btn-archivos.descargar:hover {
+    background: #138496;
+}
+
+.btn-archivos.subir {
+    background: #28a745;
+    color: white;
+}
+
+.btn-archivos.subir:hover {
+    background: #218838;
 }
