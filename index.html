@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Solicitudes de Fondos</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="supabase-config.js"></script>
     <script src="supabase-functions.js"></script>
     <link rel="stylesheet" href="styles.css">
@@ -43,13 +44,13 @@
         </div>
 
         <div class="nav-tabs">
-            <div class="nav-tab" onclick="switchTab('solicitudes')">Solicitudes</div>
-            <div class="nav-tab active" onclick="switchTab('nueva')">Nueva Solicitud</div>
-            <div class="nav-tab" onclick="switchTab('seguimiento')">Seguimiento</div>
-            <div class="nav-tab" onclick="switchTab('usuarios')">Usuarios</div>
-            <div class="nav-tab" onclick="switchTab('proveedores')">Proveedores</div>
-            <div class="nav-tab" onclick="switchTab('empresas')">Empresas</div>
-            <div class="nav-tab" onclick="switchTab('roles')">Roles y Permisos</div>
+            <div class="nav-tab" onclick="switchTab('solicitudes', event)">Solicitudes</div>
+            <div class="nav-tab active" onclick="switchTab('nueva', event)">Nueva Solicitud</div>
+            <div class="nav-tab" onclick="switchTab('seguimiento', event)">Seguimiento</div>
+            <div class="nav-tab" onclick="switchTab('usuarios', event)">Usuarios</div>
+            <div class="nav-tab" onclick="switchTab('proveedores', event)">Proveedores</div>
+            <div class="nav-tab" onclick="switchTab('empresas', event)">Empresas</div>
+            <div class="nav-tab" onclick="switchTab('roles', event)">Roles y Permisos</div>
         </div>
 
         <!-- Tab: Lista de Solicitudes -->
@@ -65,11 +66,11 @@
                     <thead>
                         <tr>
                             <th>Origen</th>
-                            <th>Proveedor</th>
-                            <th>Concepto</th>
+                            <th>Proveedor / Concepto</th>
                             <th>Monto Total</th>
                             <th>Estado</th>
                             <th>Fecha</th>
+                            <th>Archivos</th>
                             <th>Pagada</th>
                             <th class="acciones-column">Acciones</th>
                         </tr>
@@ -81,10 +82,24 @@
 
         <!-- Tab: Nueva Solicitud -->
         <div id="nuevaTab" class="tab-content active">
-            <h3>Nueva Solicitud de Fondos</h3>
-            <form id="solicitudForm" onsubmit="crearSolicitud(event)">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3>Nueva Solicitud de Fondos</h3>
                 
-                <!-- SECCIÓN 1: Información General -->
+                <!-- Toggle para cambiar formato -->
+                <div class="formato-toggle">
+                    <button type="button" id="btnFormatoNormal" class="btn-toggle active" onclick="cambiarFormato('normal')">
+                        Solicitud Normal
+                    </button>
+                    <button type="button" id="btnFormatoCajaChica" class="btn-toggle" onclick="cambiarFormato('cajaChica')">
+                        Reembolso Caja Chica
+                    </button>
+                </div>
+            </div>
+            
+            <form id="solicitudForm" onsubmit="crearSolicitud(event)">
+                <input type="hidden" id="tipoFormato" value="normal">
+                
+                <!-- SECCIÓN 1: Información General (COMÚN PARA AMBOS FORMATOS) -->
                 <div class="form-section section-1">
                     <h4 class="section-title">Información General</h4>
                     
@@ -133,7 +148,7 @@
                     </div>
 
                     <!-- Vincular con solicitud existente -->
-                    <div class="form-group">
+                    <div class="form-group" id="vincularSolicitudGroup">
                         <label for="solicitudVinculada">Vincular con:</label>
                         <select id="solicitudVinculada" multiple size="5">
                             <option value="" selected>Sin vincular</option>
@@ -142,110 +157,212 @@
                     </div>
                 </div>
 
-                <!-- SECCIÓN 2: Concepto General -->
-                <div class="form-section section-2">
-                    <h4 class="section-title">Concepto General</h4>
-                    
-                    <div class="form-row">
-                        <div class="form-group" style="flex: 2;">
-                            <label for="conceptoGeneral">Concepto General: *</label>
-                            <textarea id="conceptoGeneral" rows="3" required></textarea>
+                <!-- FORMATO NORMAL: Secciones 2, 3 y 4 -->
+                <div id="formatoNormal">
+                    <!-- SECCIÓN 2: Concepto General -->
+                    <div class="form-section section-2">
+                        <h4 class="section-title">Concepto General</h4>
+                        
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 2;">
+                                <label for="conceptoGeneral">Concepto General: *</label>
+                                <textarea id="conceptoGeneral" rows="3" required></textarea>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label for="montoConceptoGeneral">Monto Total sin IVA (MXN): *</label>
+                                <input type="text" id="montoConceptoGeneral" required 
+                                    oninput="formatearMoneda(this)" 
+                                    onblur="formatearMonedaCompleto(this); calcularMontoConceptoPago()">
+                            </div>
                         </div>
-                        <div class="form-group" style="flex: 1;">
-                            <label for="montoConceptoGeneral">Monto Total sin IVA (MXN): *</label>
-                            <input type="text" id="montoConceptoGeneral" required 
-                                oninput="formatearMoneda(this)" 
-                                onblur="formatearMonedaCompleto(this); calcularMontoConceptoPago()">
+                    </div>
+
+                    <!-- SECCIÓN 3: Detalles de Pago -->
+                    <div class="form-section section-3">
+                        <h4 class="section-title">Detalles de Pago</h4>
+                        
+                        <!-- Concepto de Pago Específico -->
+                        <div class="form-group">
+                            <label for="conceptoPago">Concepto de Pago Específico:</label>
+                            <textarea id="conceptoPago" rows="2" placeholder="Descripción detallada del pago específico (opcional)"></textarea>
+                        </div>
+
+                        <!-- Porcentaje de Anticipo y Monto del Concepto de Pago -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="porcentajeAnticipo">Porcentaje de Anticipo (%):</label>
+                                <input type="number" id="porcentajeAnticipo" value="100" min="0" max="100" step="0.01" 
+                                    oninput="calcularMontoConceptoPago()">
+                            </div>
+                            <div class="form-group">
+                                <label for="subtotal">Monto del Concepto de Pago (MXN): *</label>
+                                <input type="text" id="subtotal" required 
+                                    oninput="formatearMoneda(this)" 
+                                    onblur="formatearMonedaCompleto(this); calcularTotal()">
+                            </div>
+                        </div>
+
+                        <!-- Impuestos -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="impuestos">IVA (%):</label>
+                                <input type="number" id="impuestos" value="16" min="0" max="100" step="0.01" oninput="calcularTotal()">
+                            </div>
+                            <div class="form-group">
+                                <label for="montoImpuestos">Monto de IVA (MXN):</label>
+                                <input type="text" id="montoImpuestos" readonly style="background: #f8f9fa;">
+                            </div>
+                        </div>
+
+                        <!-- Total -->
+                        <div class="form-group">
+                            <label for="total">Total a Pagar (MXN): *</label>
+                            <input type="text" id="total" readonly required style="background: #f8f9fa; font-weight: bold;">
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN 4: Información del Proveedor -->
+                    <div class="form-section section-4">
+                        <h4 class="section-title">Información del Proveedor</h4>
+                        
+                        <!-- Beneficiario/Proveedor -->
+                        <div class="form-group">
+                            <label for="beneficiario">Proveedor: *</label>
+                            <select id="beneficiario" required onchange="cargarDatosBeneficiario()">
+                                <option value="">Seleccione proveedor</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="proveedor">Razón Social del Proveedor: *</label>
+                            <input type="text" id="proveedor" required readonly style="background: #f8f9fa;">
+                        </div>
+
+                        <!-- Datos Bancarios -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="banco">Banco: *</label>
+                                <input type="text" id="banco" required readonly style="background: #f8f9fa;">
+                            </div>
+                            <div class="form-group">
+                                <label for="cuenta">Cuenta: *</label>
+                                <input type="text" id="cuenta" required readonly style="background: #f8f9fa;">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="clabe">CLABE: *</label>
+                                <input type="text" id="clabe" required readonly style="background: #f8f9fa;">
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- SECCIÓN 3: Detalles de Pago -->
-                <div class="form-section section-3">
-                    <h4 class="section-title">Detalles de Pago</h4>
+                <!-- FORMATO CAJA CHICA: Tabla de gastos -->
+                <div id="formatoCajaChica" style="display: none;">
+                    <div class="form-section section-5">
+                        <h4 class="section-title" style="background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);">
+                            Reembolso de Gastos de Caja Chica
+                        </h4>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <button type="button" class="btn btn-success" onclick="agregarFilaGasto()">
+                                + Agregar Gasto
+                            </button>
+                        </div>
+                        
+                        <div class="table-container">
+                            <table id="tablaGastos" class="tabla-gastos">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 110px;">Fecha Factura *</th>
+                                        <th style="width: 120px;">Factura/Nota *</th>
+                                        <th style="min-width: 180px;">Descripción *</th>
+                                        <th style="width: 160px;">Proveedor *</th>
+                                        <th style="width: 120px;">Monto (MXN) *</th>
+                                        <th style="width: 140px;">PDF/Imagen *</th>
+                                        <th style="width: 100px;">XML</th>
+                                        <th style="width: 80px;">Autorizado</th>
+                                        <th style="width: 70px;">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bodyGastos">
+                                    <!-- Las filas se agregarán dinámicamente -->
+                                </tbody>
+                                <tfoot>
+                                    <tr style="background: #f8f9fa; font-weight: bold;">
+                                        <td colspan="4" style="text-align: right; padding: 15px;">A REEMBOLSAR:</td>
+                                        <td colspan="5" style="padding: 15px; font-size: 16px; color: #2d7a4a;">
+                                            <span id="totalReembolsar">$0.00</span>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
                     
-                    <!-- Concepto de Pago Específico -->
-                    <div class="form-group">
-                        <label for="conceptoPago">Concepto de Pago Específico:</label>
-                        <textarea id="conceptoPago" rows="2" placeholder="Descripción detallada del pago específico (opcional)"></textarea>
-                    </div>
-
-                    <!-- Porcentaje de Anticipo y Monto del Concepto de Pago -->
-                    <div class="form-row">
+                    <!-- SECCIÓN 4: Información del Solicitante (PARA CAJA CHICA) -->
+                    <div class="form-section section-4">
+                        <h4 class="section-title">Información del Solicitante</h4>
+                        
+                        <!-- Beneficiario/Solicitante -->
                         <div class="form-group">
-                            <label for="porcentajeAnticipo">Porcentaje de Anticipo (%):</label>
-                            <input type="number" id="porcentajeAnticipo" value="100" min="0" max="100" step="0.01" 
-                                oninput="calcularMontoConceptoPago()">
+                            <label for="beneficiarioCajaChica">Solicitante: *</label>
+                            <select id="beneficiarioCajaChica" onchange="cargarDatosBeneficiarioCajaChica()">
+                                <option value="">Seleccione solicitante</option>
+                            </select>
                         </div>
-                        <div class="form-group">
-                            <label for="subtotal">Monto del Concepto de Pago (MXN): *</label>
-                            <input type="text" id="subtotal" required 
-                                oninput="formatearMoneda(this)" 
-                                onblur="formatearMonedaCompleto(this); calcularTotal()">
-                        </div>
-                    </div>
 
-                    <!-- Impuestos -->
-                    <div class="form-row">
                         <div class="form-group">
-                            <label for="impuestos">IVA (%):</label>
-                            <input type="number" id="impuestos" value="16" min="0" max="100" step="0.01" oninput="calcularTotal()">
+                            <label for="proveedorCajaChica">Nombre Completo: *</label>
+                            <input type="text" id="proveedorCajaChica" readonly style="background: #f8f9fa;">
                         </div>
-                        <div class="form-group">
-                            <label for="montoImpuestos">Monto de IVA (MXN):</label>
-                            <input type="text" id="montoImpuestos" readonly style="background: #f8f9fa;">
+
+                        <!-- Datos Bancarios -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="bancoCajaChica">Banco: *</label>
+                                <input type="text" id="bancoCajaChica" readonly style="background: #f8f9fa;">
+                            </div>
+                            <div class="form-group">
+                                <label for="cuentaCajaChica">Cuenta: *</label>
+                                <input type="text" id="cuentaCajaChica" readonly style="background: #f8f9fa;">
+                            </div>
                         </div>
-                    </div>
 
-                    <!-- Total -->
-                    <div class="form-group">
-                        <label for="total">Total a Pagar (MXN): *</label>
-                        <input type="text" id="total" readonly required style="background: #f8f9fa; font-weight: bold;">
-                    </div>
-                </div>
-
-                <!-- SECCIÓN 4: Información del Proveedor -->
-                <div class="form-section section-4">
-                    <h4 class="section-title">Información del Proveedor</h4>
-                    
-                    <!-- Beneficiario/Proveedor -->
-                    <div class="form-group">
-                        <label for="beneficiario">Proveedor: *</label>
-                        <select id="beneficiario" required onchange="cargarDatosBeneficiario()">
-                            <option value="">Seleccione proveedor</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="proveedor">Razón Social del Proveedor: *</label>
-                        <input type="text" id="proveedor" required readonly style="background: #f8f9fa;">
-                    </div>
-
-                    <!-- Datos Bancarios -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="banco">Banco: *</label>
-                            <input type="text" id="banco" required readonly style="background: #f8f9fa;">
-                        </div>
-                        <div class="form-group">
-                            <label for="cuenta">Cuenta: *</label>
-                            <input type="text" id="cuenta" required readonly style="background: #f8f9fa;">
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="clabe">CLABE: *</label>
-                            <input type="text" id="clabe" required readonly style="background: #f8f9fa;">
-                        </div>
-                        <div class="form-group">
-                            <label for="ciudad">Ciudad: *</label>
-                            <input type="text" id="ciudad" required>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="clabeCajaChica">CLABE: *</label>
+                                <input type="text" id="clabeCajaChica" readonly style="background: #f8f9fa;">
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <button type="submit" class="btn">Crear Solicitud</button>
+                <!-- Gestión de archivos -->
+                <div class="form-section" style="background: #f0f8ff; border-color: #17a2b8;">
+                    <h4 class="section-title" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
+                        Archivos Adjuntos
+                    </h4>
+                    
+                    <div class="form-group">
+                        <label for="archivosNuevaSolicitud">Subir archivos (PDF, imágenes):</label>
+                        <input type="file" id="archivosNuevaSolicitud" multiple accept=".pdf,.jpg,.jpeg,.png">
+                        <small style="color: #666;">Puedes seleccionar múltiples archivos</small>
+                    </div>
+                    
+                    <div id="listaArchivosNuevaSolicitud" style="margin-top: 15px;"></div>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button type="submit" class="btn">Crear Solicitud</button>
+                    <button type="button" id="btnCancelarEdicion" class="btn btn-danger" 
+                            onclick="cancelarEdicion()" 
+                            style="display: none;">
+                        Cancelar Edición
+                    </button>
+                </div>
             </form>
         </div>
 
@@ -302,6 +419,7 @@
                         <tr>
                             <th>Nombre / Razón Social</th>
                             <th>RFC</th>
+                            <th>Tipo</th>
                             <th>Banco</th>
                             <th>Cuenta</th>
                             <th>CLABE</th>
@@ -375,9 +493,16 @@
             <div id="archivosSolicitudInfo" style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;"></div>
             
             <div class="form-group">
-                <label for="archivosFactura">Subir archivos (PDF, imágenes):</label>
-                <input type="file" id="archivosFactura" multiple accept=".pdf,.jpg,.jpeg,.png">
-                <button class="btn" onclick="subirArchivos()" style="margin-top: 10px;">Subir Archivos</button>
+                <label for="archivosFactura">
+                    <strong>Subir Facturas y Documentos</strong>
+                    <small style="display: block; color: #666; margin-top: 4px;">
+                        Acepta archivos PDF, XML e imágenes (JPG, PNG)
+                    </small>
+                </label>
+                <input type="file" id="archivosFactura" multiple accept=".pdf,.xml,.jpg,.jpeg,.png">
+                <button class="btn" onclick="subirArchivos()" style="margin-top: 10px; background: #28a745;">
+                    ↑ Subir Archivos
+                </button>
             </div>
             
             <div id="listaArchivos" style="margin-top: 20px;"></div>
@@ -451,6 +576,14 @@
                 <div class="form-group">
                     <label for="proveedorRFC">RFC:</label>
                     <input type="text" id="proveedorRFC">
+                </div>
+                <div class="form-group">
+                    <label for="proveedorTipo">Tipo: *</label>
+                    <select id="proveedorTipo" required>
+                        <option value="">Seleccione tipo</option>
+                        <option value="proveedor">Proveedor</option>
+                        <option value="jefe_sucursal">Jefe de Sucursal</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label for="proveedorBanco">Banco: *</label>
