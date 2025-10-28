@@ -1,14 +1,154 @@
 // SECCIÓN 1 - Variables globales y funciones de inicialización
 
 let usuarios = {
-    'ags_jefe': { password: 'ags2025', rol: 'jefe', sucursal: 'AGS', nombre: 'Jefe Aguascalientes' },
-    'leo_jefe': { password: 'leo2025', rol: 'jefe', sucursal: 'LEO', nombre: 'Jefe León' },
-    'can_jefe': { password: 'can2025', rol: 'jefe', sucursal: 'CAN', nombre: 'Jefe Cancún' },
-    'mty_jefe': { password: 'mty2025', rol: 'jefe', sucursal: 'MTY', nombre: 'Jefe Monterrey' },
-    'gdl_jefe': { password: 'gdl2025', rol: 'jefe', sucursal: 'GDL', nombre: 'Jefe Guadalajara' },
-    'vsa_jefe': { password: 'vsa2025', rol: 'jefe', sucursal: 'VSA', nombre: 'Jefe Villahermosa' },
-    'coordinador': { password: 'coord2025', rol: 'coordinador', sucursal: null, nombre: 'Coordinador Administrativo' },
-    'admin_unico': { password: 'admin2025', rol: 'admin', sucursal: null, nombre: 'Administrador General' }
+    // ADMIN
+    'admin_unico': { 
+        password: 'admin2025', 
+        rol: 'admin', 
+        sucursal: null, 
+        nombre: 'Administrador General',
+        gerencia: null,
+        empresaId: null,
+        empresasIds: null
+    },
+    
+    // JEFES DE SUCURSAL (requieren sucursal y gerencia)
+    'ags_jefe': { 
+        password: 'ags2025', 
+        rol: 'jefe', 
+        sucursal: 'AGS', 
+        nombre: 'Jefe Aguascalientes',
+        gerencia: 'GCS',  // ✅ Pertenece a Gerencia de Sucursales
+        empresaId: null,
+        empresasIds: null
+    },
+    'leo_jefe': { 
+        password: 'leo2025', 
+        rol: 'jefe', 
+        sucursal: 'LEO', 
+        nombre: 'Jefe León',
+        gerencia: 'GCS',
+        empresaId: null,
+        empresasIds: null
+    },
+    'can_jefe': { 
+        password: 'can2025', 
+        rol: 'jefe', 
+        sucursal: 'CAN', 
+        nombre: 'Jefe Cancún',
+        gerencia: 'GCS',
+        empresaId: null,
+        empresasIds: null
+    },
+    'mty_jefe': { 
+        password: 'mty2025', 
+        rol: 'jefe', 
+        sucursal: 'MTY', 
+        nombre: 'Jefe Monterrey',
+        gerencia: 'GCS',
+        empresaId: null,
+        empresasIds: null
+    },
+    'gdl_jefe': { 
+        password: 'gdl2025', 
+        rol: 'jefe', 
+        sucursal: 'GDL', 
+        nombre: 'Jefe Guadalajara',
+        gerencia: 'GCS',
+        empresaId: null,
+        empresasIds: null
+    },
+    'vsa_jefe': { 
+        password: 'vsa2025', 
+        rol: 'jefe', 
+        sucursal: 'VSA', 
+        nombre: 'Jefe Villahermosa',
+        gerencia: 'GCS',
+        empresaId: null,
+        empresasIds: null
+    },
+    
+    // COORDINADORES (requieren gerencia, pueden o no tener sucursal)
+    'coordinador_sucursales': { 
+        password: 'cos2025', 
+        rol: 'coordinador', 
+        sucursal: 'COS',  // Coordinador de Sucursales
+        nombre: 'Coordinador de Sucursales',
+        gerencia: 'GCS',
+        empresaId: null,
+        empresasIds: null
+    },
+    'coordinador_monitoreo': {
+        password: 'mon2025',
+        rol: 'coordinador',
+        sucursal: 'MON',
+        nombre: 'Coordinador de Monitoreo e Iluminación',
+        gerencia: 'GCC',  // ✅ Pertenece a Gerencia de Centro
+        empresaId: null,
+        empresasIds: null
+    },
+    
+    // GERENCIAS (nuevos roles)
+    'gerente_sucursales': {
+        password: 'gcs2025',
+        rol: 'gerencia_sucursales',
+        sucursal: null,
+        nombre: 'Gerente de Sucursales',
+        gerencia: null,  // Es la gerencia misma
+        empresaId: null,
+        empresasIds: null
+    },
+    'gerente_centro': {
+        password: 'gcc2025',
+        rol: 'gerencia_centro',
+        sucursal: null,
+        nombre: 'Gerente de Centro',
+        gerencia: null,
+        empresaId: null,
+        empresasIds: null
+    },
+    
+    // DIRECCIONES (nuevos roles)
+    'director_operaciones': {
+        password: 'dop2025',
+        rol: 'direccion_operaciones',
+        sucursal: null,
+        nombre: 'Director de Operaciones',
+        gerencia: null,
+        empresaId: null,
+        empresasIds: null
+    },
+    'director_general': {
+        password: 'dir2025',
+        rol: 'direccion_general',
+        sucursal: null,
+        nombre: 'Director General',
+        gerencia: null,
+        empresaId: null,
+        empresasIds: null
+    },
+    
+    // CONTABILIDAD (requiere una empresa)
+    'contabilidad_user': {
+        password: 'cont2025',
+        rol: 'contabilidad',
+        sucursal: null,
+        nombre: 'Usuario Contabilidad',
+        gerencia: null,
+        empresaId: 1,  // ✅ Asignado a una empresa específica
+        empresasIds: null
+    },
+    
+    // TESORERÍA (puede tener múltiples empresas)
+    'tesoreria_user': {
+        password: 'tes2025',
+        rol: 'tesoreria',
+        sucursal: null,
+        nombre: 'Usuario Tesorería',
+        gerencia: null,
+        empresaId: null,
+        empresasIds: [1, 2, 3]  // ✅ Puede atender múltiples empresas
+    }
 };
 
 // Definición de permisos disponibles
@@ -49,23 +189,10 @@ let rolesConfig = {
             'gestionar_roles'
         ],
         requiereSucursal: false,
+        requiereGerencia: false,
+        requiereEmpresa: false,
+        requiereEmpresas: false,
         editable: false
-    },
-    'coordinador': {
-        nombre: 'Coordinador de Departamentos',
-        permisos: [
-            'ver_todas_solicitudes',
-            'crear_solicitud',
-            'editar_solicitud',
-            'autorizar_solicitud',
-            'cancelar_solicitud',
-            'marcar_pagada',
-            'gestionar_comprobantes',
-            'descargar_archivos',
-            'exportar_csv'
-        ],
-        requiereSucursal: false,
-        editable: true
     },
     'jefe': {
         nombre: 'Jefe de Departamento',
@@ -78,9 +205,158 @@ let rolesConfig = {
             'marcar_pagada'
         ],
         requiereSucursal: true,
+        requiereGerencia: true,
+        requiereEmpresa: false,
+        requiereEmpresas: false,
         editable: true
-    }
+    },
+    'coordinador': {
+        nombre: 'Coordinador',
+        permisos: [
+            'ver_todas_solicitudes',
+            'crear_solicitud',
+            'editar_solicitud',
+            'autorizar_solicitud',
+            'cancelar_solicitud',
+            'marcar_pagada',
+            'gestionar_comprobantes',
+            'descargar_archivos',
+            'exportar_csv'
+        ],
+        requiereSucursal: false,
+        requiereGerencia: true,
+        requiereEmpresa: false,
+        requiereEmpresas: false,
+        editable: true
+    },
+    'gerencia_sucursales': {
+        nombre: 'Gerencia de Sucursales',
+        codigo: 'GCS',
+        permisos: [
+            'ver_todas_solicitudes',
+            'crear_solicitud',
+            'editar_solicitud',
+            'autorizar_solicitud',
+            'cancelar_solicitud',
+            'marcar_pagada',
+            'gestionar_comprobantes',
+            'descargar_archivos',
+            'exportar_csv'
+        ],
+        requiereSucursal: false,
+        requiereGerencia: false,
+        requiereEmpresa: false,
+        requiereEmpresas: false,
+        nivelAutorizacion: 2,
+        editable: true
+    },
+    'gerencia_centro': {
+        nombre: 'Gerencia de Centro',
+        codigo: 'GCC',
+        permisos: [
+            'ver_todas_solicitudes',
+            'crear_solicitud',
+            'editar_solicitud',
+            'autorizar_solicitud',
+            'cancelar_solicitud',
+            'marcar_pagada',
+            'gestionar_comprobantes',
+            'descargar_archivos',
+            'exportar_csv'
+        ],
+        requiereSucursal: false,
+        requiereGerencia: false,
+        requiereEmpresa: false,
+        requiereEmpresas: false,
+        nivelAutorizacion: 2,
+        editable: true
+    },
+    'direccion_operaciones': {
+        nombre: 'Dirección de Operaciones',
+        codigo: 'DOP',
+        permisos: [
+            'ver_todas_solicitudes',
+            'crear_solicitud',
+            'editar_solicitud',
+            'autorizar_solicitud',
+            'cancelar_solicitud',
+            'marcar_pagada',
+            'gestionar_comprobantes',
+            'descargar_archivos',
+            'exportar_csv',
+            'gestionar_usuarios',
+            'gestionar_proveedores'
+        ],
+        requiereSucursal: false,
+        requiereGerencia: false,
+        requiereEmpresa: false,
+        requiereEmpresas: false,
+        nivelAutorizacion: 3,
+        editable: true
+    },
+    'direccion_general': {
+        nombre: 'Dirección General',
+        codigo: 'DIR',
+        permisos: [
+            'ver_todas_solicitudes',
+            'crear_solicitud',
+            'editar_solicitud',
+            'autorizar_solicitud',
+            'cancelar_solicitud',
+            'marcar_pagada',
+            'gestionar_comprobantes',
+            'gestionar_usuarios',
+            'gestionar_proveedores',
+            'gestionar_empresas',
+            'descargar_archivos',
+            'exportar_csv',
+            'gestionar_roles'
+        ],
+        requiereSucursal: false,
+        requiereGerencia: false,
+        requiereEmpresa: false,
+        requiereEmpresas: false,
+        nivelAutorizacion: 4,
+        editable: true
+    },
+    'contabilidad': {
+        nombre: 'Contabilidad',
+        codigo: 'CONT',
+        permisos: [
+            'ver_todas_solicitudes',
+            'descargar_archivos',
+            'exportar_csv'
+        ],
+        requiereSucursal: false,
+        requiereGerencia: false,
+        requiereEmpresa: true,
+        requiereEmpresas: false,
+        soloRevisa: true,
+        nivelAutorizacion: 0,
+        editable: true
+    },
+    'tesoreria': {
+        nombre: 'Tesorería',
+        codigo: 'TES',
+        permisos: [
+            'ver_todas_solicitudes',
+            'marcar_pagada',
+            'gestionar_comprobantes',
+            'descargar_archivos',
+            'exportar_csv'
+        ],
+        requiereSucursal: false,
+        requiereGerencia: false,
+        requiereEmpresa: false,
+        requiereEmpresas: true,
+        soloPaga: true,
+        nivelAutorizacion: 0,
+        editable: true
+    }    
 };
+
+console.log('✅ rolesConfig cargado correctamente:', rolesConfig);
+console.log('✅ Jefe requiere gerencia:', rolesConfig['jefe']?.requiereGerencia);
 
 let beneficiarios = [
     {
@@ -115,7 +391,7 @@ let contadores = {
     MTY: 0, 
     GDL: 0, 
     VSA: 0,
-    CDMX: 0,
+    //CDMX: 0,
     GCC: 0,
     GCS: 0,
     DOP: 0,
@@ -344,7 +620,7 @@ function getSucursalName(code) {
         'MTY': 'Monterrey',
         'GDL': 'Guadalajara',
         'VSA': 'Villahermosa',
-        'CDMX': 'Ciudad de México',
+        //'CDMX': 'Ciudad de México',
         'GCC': 'Gerencia Centro',
         'GCS': 'Gerencia de Departamentos',
         'DOP': 'Dirección de Operaciones',
@@ -381,7 +657,6 @@ function switchTab(tabName, event) {
     if (event && event.target) {
         event.target.classList.add('active');
     } else {
-        // Si no hay evento, buscar la pestaña por el texto
         const tabs = document.querySelectorAll('.nav-tab');
         tabs.forEach(tab => {
             const tabText = tab.textContent.toLowerCase();
@@ -398,9 +673,15 @@ function switchTab(tabName, event) {
         tabContent.classList.add('active');
     }
     
-    // Cargar datos según la pestaña
+    // Cargar datos según la pestaña (CON CARGA BAJO DEMANDA)
     if (tabName === 'solicitudes') {
-        cargarSolicitudes();
+        // Cargar solicitudes solo cuando se accede a la pestaña
+        cargarSolicitudesSupabase().then(() => {
+            cargarSolicitudes();
+        }).catch(error => {
+            console.error('Error al cargar solicitudes:', error);
+            cargarSolicitudes(); // Intentar cargar lo que haya en memoria
+        });
     } else if (tabName === 'usuarios') {
         cargarUsuarios();
     } else if (tabName === 'proveedores') {
@@ -1521,7 +1802,6 @@ async function crearSolicitud(event) {
                 const index = solicitudes.findIndex(s => s.id === solicitud.id);
                 if (index !== -1) {
                     solicitudes[index] = { ...solicitud };
-                    console.log('✓ Solicitud actualizada en array local');
                 }
 
                 // NO recargar desde Supabase inmediatamente
@@ -1555,8 +1835,13 @@ async function crearSolicitud(event) {
                 solicitud.ciudad = '';
                 
                 await actualizarSolicitudSupabase(solicitud);
-                await cargarDatosDesdeSupabase();
-                
+                //await cargarDatosDesdeSupabase();
+                // Actualizar array local
+                const index = solicitudes.findIndex(s => s.id === solicitud.id);
+                if (index !== -1) {
+                    solicitudes[index] = { ...solicitud };
+                }
+
                 console.log('✓ Solicitud normal actualizada');
             }
             
@@ -1693,6 +1978,10 @@ async function crearSolicitud(event) {
             const solicitudGuardada = await guardarSolicitudSupabase(solicitud);
             solicitudes.push(solicitudGuardada);
             contadores[sucursal] = numeroConsecutivo;
+            
+            // Recargar solicitudes después de crear
+            await cargarSolicitudesSupabase();
+            
         } catch (error) {
             console.error('Error en Supabase, guardando localmente:', error);
             solicitudes.push(solicitud);
@@ -1838,7 +2127,8 @@ function cargarSolicitudes() {
         const puedeAutorizar = tienePermiso('autorizar_solicitud') && solicitud.estado === 'pendiente';
         const puedeCancelar = tienePermiso('cancelar_solicitud');
         const puedeDescargarArchivos = tienePermiso('descargar_archivos');
-        
+        const puedeEliminar = usuarioActual && usuarioActual.rol === 'admin'; // ✅ NUEVO
+
         const botonesAccion = `
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 3px; max-width: 140px;">
                 <button class="btn" onclick="verDetalle(${solicitud.id})" 
@@ -1872,6 +2162,11 @@ function cargarSolicitudes() {
                             style="padding: 5px; font-size: 16px; background: #d0d0d0; color: #808080; cursor: not-allowed; opacity: 0.6;" title="No puede cancelar">
                         ✕
                     </button>`}
+                ${puedeEliminar ? 
+                    `<button class="btn" onclick="eliminarSolicitud(${solicitud.id})" 
+                            style="padding: 5px; font-size: 16px; background: #8b0000; color: white; grid-column: 1 / -1;" title="Eliminar permanentemente (ADMIN)">
+                        🗑 ELIMINAR
+                    </button>` : ''}
             </div>
         `;
         
@@ -2100,189 +2395,70 @@ function exportarSolicitudesCSV() {
 }
 
 function editarSolicitud(id) {
+    console.log('=== EDITANDO SOLICITUD ===');
+    console.log('ID recibido:', id);
+    
     const solicitud = solicitudes.find(s => s.id === id);
+    console.log('Solicitud encontrada:', solicitud);
+    
     if (!solicitud || solicitud.estado !== 'pendiente') {
         alert('Solo se pueden editar solicitudes con estado pendiente');
+        console.log('Estado de solicitud:', solicitud?.estado);
         return;
     }
     
+    console.log('Cambiando a pestaña nueva...');
     // Cambiar a la pestaña de nueva solicitud
     switchTab('nueva');
     
     // Determinar el tipo de formato
     const esCajaChica = solicitud.tipoFormato === 'cajaChica';
+    console.log('¿Es caja chica?:', esCajaChica);
     
     if (esCajaChica) {
         // ===== EDITAR SOLICITUD DE CAJA CHICA =====
+        console.log('Cargando modo edición CAJA CHICA...');
         
         // Cambiar al formato de caja chica
         cambiarFormato('cajaChica');
         
-        // Cargar datos básicos
-        document.getElementById('empresa').value = solicitud.empresaId;
-        document.getElementById('sucursal').value = solicitud.sucursal;
-        document.getElementById('beneficiarioCajaChica').value = solicitud.beneficiarioId;
-        
-        // Cargar datos del beneficiario
-        cargarDatosBeneficiarioCajaChica();
-        
-        // Limpiar tabla de gastos actual
-        const tbody = document.getElementById('bodyGastos');
-        tbody.innerHTML = '';
-        
-        // Resetear contadores y archivos
-        contadorFilasGastos = 0;
-        archivosPDFGastos = {};
-        archivosXMLGastos = {};
-        
-        // Cargar gastos de la solicitud
-        if (solicitud.gastosCajaChica && solicitud.gastosCajaChica.length > 0) {
-            solicitud.gastosCajaChica.forEach(gasto => {
-                const id = ++contadorFilasGastos;
-                
-                // Crear fila
-                const fila = tbody.insertRow();
-                fila.innerHTML = `
-                    <td>
-                        <input type="date" id="fecha_${id}" class="gasto-campo" required 
-                               value="${gasto.fecha}">
-                    </td>
-                    <td>
-                        <input type="text" id="factura_${id}" class="gasto-campo" 
-                               placeholder="Núm. factura" required value="${gasto.factura}">
-                    </td>
-                    <td>
-                        <input type="text" id="descripcion_${id}" class="gasto-campo" 
-                               placeholder="Descripción del gasto" required value="${gasto.descripcion}">
-                    </td>
-                    <td>
-                        <div class="autocomplete-container">
-                            <input type="text" id="proveedor_${id}" class="gasto-campo" 
-                                   placeholder="Nombre del proveedor" required value="${gasto.proveedor}"
-                                   oninput="mostrarAutocomplete(${id})"
-                                   onfocus="mostrarAutocomplete(${id})"
-                                   onblur="setTimeout(() => ocultarAutocomplete(${id}), 200)">
-                            <div id="autocomplete_${id}" class="autocomplete-list"></div>
-                        </div>
-                    </td>
-                    <td>
-                        <input type="text" id="monto_${id}" class="gasto-campo" 
-                               placeholder="$0.00" required value="$${gasto.monto.toLocaleString('es-MX', {minimumFractionDigits: 2})}"
-                            oninput="formatearMoneda(this)" 
-                            onblur="formatearMonedaCompleto(this); calcularTotalReembolso()"
-                            onkeyup="calcularTotalReembolso()">
-                    </td>
-                    <td>
-                        <input type="file" id="archivoPDF_${id}" accept=".pdf,.jpg,.jpeg,.png" 
-                               onchange="manejarArchivoPDF(${id})" 
-                               style="display: none;">
-                        <button type="button" id="btnSubirPDF_${id}" class="btn btn-secondary" 
-                                onclick="document.getElementById('archivoPDF_${id}').click()"
-                                style="padding: 4px 8px; font-size: 11px; width: 100%; ${gasto.archivoPDF ? 'background: #28a745;' : ''}">
-                            ${gasto.archivoPDF ? '✓ Cargado' : 'Subir'}
-                        </button>
-                        <div id="statusPDF_${id}" class="archivo-status ${gasto.archivoPDF ? 'cargado' : 'pendiente'}" 
-                             style="display: block;">
-                            ${gasto.archivoPDF ? gasto.archivoPDF.nombre : 'Sin archivo'}
-                        </div>
-                    </td>
-                    <td>
-                        <input type="file" id="archivoXML_${id}" accept=".xml" 
-                               onchange="manejarArchivoXML(${id})" 
-                               style="display: none;">
-                        <button type="button" id="btnSubirXML_${id}" class="btn btn-secondary" 
-                                onclick="document.getElementById('archivoXML_${id}').click()"
-                                style="padding: 4px 8px; font-size: 11px; width: 100%; ${gasto.archivoXML ? 'background: #28a745;' : ''}">
-                            ${gasto.archivoXML ? '✓ XML' : 'XML'}
-                        </button>
-                        <div id="statusXML_${id}" class="archivo-status ${gasto.archivoXML ? 'cargado' : 'pendiente'}" 
-                             style="display: block;">
-                            ${gasto.archivoXML ? gasto.archivoXML.nombre : 'Opcional'}
-                        </div>
-                    </td>
-                    <td style="text-align: center;">
-                        <input type="checkbox" id="autorizado_${id}" class="checkbox-autorizado" 
-                               ${gasto.autorizado ? 'checked' : ''} onchange="calcularTotalReembolso()">
-                    </td>
-                    <td style="text-align: center;">
-                        <button type="button" class="btn btn-danger" onclick="eliminarFilaGasto(this)" 
-                                style="padding: 5px 10px; font-size: 12px;">✕</button>
-                    </td>
-                `;
-                
-                // Restaurar archivos
-                if (gasto.archivoPDF) {
-                    archivosPDFGastos[id] = gasto.archivoPDF;
-                    
-                    // Agregar botones de acción para PDF
-                    const statusPDF = document.getElementById(`statusPDF_${id}`);
-                    const containerBotones = document.createElement('div');
-                    containerBotones.style.display = 'flex';
-                    containerBotones.style.gap = '4px';
-                    containerBotones.style.marginTop = '4px';
-                    
-                    const btnVer = document.createElement('button');
-                    btnVer.type = 'button';
-                    btnVer.className = 'btn-accion-archivo';
-                    btnVer.textContent = '👁';
-                    btnVer.title = 'Ver archivo';
-                    btnVer.onclick = () => verArchivoGasto(id, 'pdf');
-                    
-                    const btnEliminar = document.createElement('button');
-                    btnEliminar.type = 'button';
-                    btnEliminar.className = 'btn-accion-archivo btn-eliminar';
-                    btnEliminar.textContent = '🗑';
-                    btnEliminar.title = 'Eliminar archivo';
-                    btnEliminar.onclick = () => eliminarArchivoPDFGasto(id);
-                    
-                    containerBotones.appendChild(btnVer);
-                    containerBotones.appendChild(btnEliminar);
-                    statusPDF.parentNode.appendChild(containerBotones);
-                }
-                
-                if (gasto.archivoXML) {
-                    archivosXMLGastos[id] = gasto.archivoXML;
-                    
-                    // Agregar botones de acción para XML
-                    const statusXML = document.getElementById(`statusXML_${id}`);
-                    const containerBotones = document.createElement('div');
-                    containerBotones.style.display = 'flex';
-                    containerBotones.style.gap = '4px';
-                    containerBotones.style.marginTop = '4px';
-                    
-                    const btnDescargar = document.createElement('button');
-                    btnDescargar.type = 'button';
-                    btnDescargar.className = 'btn-accion-archivo';
-                    btnDescargar.textContent = '⬇';
-                    btnDescargar.title = 'Descargar archivo';
-                    btnDescargar.onclick = () => descargarArchivoGasto(id, 'xml');
-                    
-                    const btnEliminar = document.createElement('button');
-                    btnEliminar.type = 'button';
-                    btnEliminar.className = 'btn-accion-archivo btn-eliminar';
-                    btnEliminar.textContent = '🗑';
-                    btnEliminar.title = 'Eliminar archivo';
-                    btnEliminar.onclick = () => eliminarArchivoXMLGasto(id);
-                    
-                    containerBotones.appendChild(btnDescargar);
-                    containerBotones.appendChild(btnEliminar);
-                    statusXML.parentNode.appendChild(containerBotones);
-                }
-            });
-            
-            // Calcular total
-            calcularTotalReembolso();
-        }
+        // **USAR requestAnimationFrame para asegurar que el DOM esté listo**
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                cargarDatosCajaChicaEdicion(solicitud, id);
+            }, 50);
+        });
         
     } else {
         // ===== EDITAR SOLICITUD NORMAL =====
+        console.log('Cargando modo edición NORMAL...');
         
         // Cambiar al formato normal
         cambiarFormato('normal');
         
-        // Cargar datos
+        // **USAR requestAnimationFrame para asegurar que el DOM esté listo**
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                cargarDatosNormalEdicion(solicitud, id);
+            }, 50);
+        });
+    }
+}
+
+function cargarDatosNormalEdicion(solicitud, solicitudId) {
+    console.log('→ Asignando valores a campos NORMAL...');
+    
+    try {
+        // Cargar datos básicos
         document.getElementById('empresa').value = solicitud.empresaId;
         document.getElementById('sucursal').value = solicitud.sucursal;
+        
+        // **DESHABILITAR SUCURSAL**
+        const sucursal = document.getElementById('sucursal');
+        sucursal.disabled = true;
+        sucursal.style.background = '#f8f9fa';
+        sucursal.style.cursor = 'not-allowed';
+        
         document.getElementById('beneficiario').value = solicitud.beneficiarioId;
         
         // Cargar datos del beneficiario
@@ -2293,15 +2469,214 @@ function editarSolicitud(id) {
         document.getElementById('conceptoPago').value = solicitud.conceptoPago || '';
         document.getElementById('claveAnuncio').value = solicitud.claveAnuncio || '';
         document.getElementById('subtotal').value = '$' + solicitud.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2});
-        document.getElementById('descuento').value = '$' + solicitud.descuento.toLocaleString('es-MX', {minimumFractionDigits: 2});
+        
+        // ❌ LÍNEA ELIMINADA:
+        // document.getElementById('descuento').value = '$' + solicitud.descuento.toLocaleString('es-MX', {minimumFractionDigits: 2});
+        
         document.getElementById('impuestos').value = solicitud.porcentajeImpuestos;
         
         // Calcular total
         calcularTotal();
+        
+        console.log('✓ Valores asignados correctamente');
+        
+        // Marcar modo edición AL FINAL
+        finalizarConfiguracionEdicion(solicitudId, solicitud);
+        
+    } catch (error) {
+        console.error('✗ Error al cargar datos:', error);
+        alert('Error al cargar los datos de la solicitud. Por favor, intente nuevamente.');
+    }
+}
+
+// Nueva función para cargar datos de solicitud CAJA CHICA en modo edición
+function cargarDatosCajaChicaEdicion(solicitud, solicitudId) {
+    console.log('Asignando valores a campos CAJA CHICA...');
+    
+    // Verificar que los elementos existan
+    const empresa = document.getElementById('empresa');
+    const sucursal = document.getElementById('sucursal');
+    const beneficiarioCajaChica = document.getElementById('beneficiarioCajaChica');
+    
+    if (!empresa || !sucursal || !beneficiarioCajaChica) {
+        console.error('Elementos no encontrados. Reintentando...');
+        setTimeout(() => cargarDatosCajaChicaEdicion(solicitud, solicitudId), 100);
+        return;
     }
     
+    console.log('Elementos encontrados. Procediendo...');
+    
+    // Cargar datos básicos
+    empresa.value = solicitud.empresaId;
+    sucursal.value = solicitud.sucursal;
+    beneficiarioCajaChica.value = solicitud.beneficiarioId;
+    
+    // **DESHABILITAR SUCURSAL**
+    sucursal.disabled = true;
+    sucursal.style.background = '#f8f9fa';
+    sucursal.style.cursor = 'not-allowed';
+    
+    // Cargar datos del beneficiario
+    cargarDatosBeneficiarioCajaChica();
+    
+    // Limpiar tabla de gastos actual
+    const tbody = document.getElementById('bodyGastos');
+    tbody.innerHTML = '';
+    
+    // Resetear contadores y archivos
+    contadorFilasGastos = 0;
+    archivosPDFGastos = {};
+    archivosXMLGastos = {};
+    
+    // Cargar gastos de la solicitud
+    if (solicitud.gastosCajaChica && solicitud.gastosCajaChica.length > 0) {
+        solicitud.gastosCajaChica.forEach(gasto => {
+            const id = ++contadorFilasGastos;
+            
+            // Crear fila
+            const fila = tbody.insertRow();
+            fila.innerHTML = `
+                <td>
+                    <input type="date" id="fecha_${id}" class="gasto-campo" required 
+                           value="${gasto.fecha}">
+                </td>
+                <td>
+                    <input type="text" id="factura_${id}" class="gasto-campo" 
+                           placeholder="Núm. factura" required value="${gasto.factura}">
+                </td>
+                <td>
+                    <input type="text" id="descripcion_${id}" class="gasto-campo" 
+                           placeholder="Descripción del gasto" required value="${gasto.descripcion}">
+                </td>
+                <td>
+                    <div class="autocomplete-container">
+                        <input type="text" id="proveedor_${id}" class="gasto-campo" 
+                               placeholder="Nombre del proveedor" required value="${gasto.proveedor}"
+                               oninput="mostrarAutocomplete(${id})"
+                               onfocus="mostrarAutocomplete(${id})"
+                               onblur="setTimeout(() => ocultarAutocomplete(${id}), 200)">
+                        <div id="autocomplete_${id}" class="autocomplete-list"></div>
+                    </div>
+                </td>
+                <td>
+                    <input type="text" id="monto_${id}" class="gasto-campo" 
+                           placeholder="$0.00" required value="$${gasto.monto.toLocaleString('es-MX', {minimumFractionDigits: 2})}"
+                        oninput="formatearMoneda(this)" 
+                        onblur="formatearMonedaCompleto(this); calcularTotalReembolso()"
+                        onkeyup="calcularTotalReembolso()">
+                </td>
+                <td>
+                    <input type="file" id="archivoPDF_${id}" accept=".pdf,.jpg,.jpeg,.png" 
+                           onchange="manejarArchivoPDF(${id})" 
+                           style="display: none;">
+                    <button type="button" id="btnSubirPDF_${id}" class="btn btn-secondary" 
+                            onclick="document.getElementById('archivoPDF_${id}').click()"
+                            style="padding: 4px 8px; font-size: 11px; width: 100%; ${gasto.archivoPDF ? 'background: #28a745;' : ''}">
+                        ${gasto.archivoPDF ? '✓ Cargado' : 'Subir'}
+                    </button>
+                    <div id="statusPDF_${id}" class="archivo-status ${gasto.archivoPDF ? 'cargado' : 'pendiente'}" 
+                         style="display: block;">
+                        ${gasto.archivoPDF ? gasto.archivoPDF.nombre : 'Sin archivo'}
+                    </div>
+                </td>
+                <td>
+                    <input type="file" id="archivoXML_${id}" accept=".xml" 
+                           onchange="manejarArchivoXML(${id})" 
+                           style="display: none;">
+                    <button type="button" id="btnSubirXML_${id}" class="btn btn-secondary" 
+                            onclick="document.getElementById('archivoXML_${id}').click()"
+                            style="padding: 4px 8px; font-size: 11px; width: 100%; ${gasto.archivoXML ? 'background: #28a745;' : ''}">
+                        ${gasto.archivoXML ? '✓ XML' : 'XML'}
+                    </button>
+                    <div id="statusXML_${id}" class="archivo-status ${gasto.archivoXML ? 'cargado' : 'pendiente'}" 
+                         style="display: block;">
+                        ${gasto.archivoXML ? gasto.archivoXML.nombre : 'Opcional'}
+                    </div>
+                </td>
+                <td style="text-align: center;">
+                    <input type="checkbox" id="autorizado_${id}" class="checkbox-autorizado" 
+                           ${gasto.autorizado ? 'checked' : ''} onchange="calcularTotalReembolso()">
+                </td>
+                <td style="text-align: center;">
+                    <button type="button" class="btn btn-danger" onclick="eliminarFilaGasto(this)" 
+                            style="padding: 5px 10px; font-size: 12px;">✕</button>
+                </td>
+            `;
+            
+            // Restaurar archivos
+            if (gasto.archivoPDF) {
+                archivosPDFGastos[id] = gasto.archivoPDF;
+                
+                // Agregar botones de acción para PDF
+                const statusPDF = document.getElementById(`statusPDF_${id}`);
+                const containerBotones = document.createElement('div');
+                containerBotones.style.display = 'flex';
+                containerBotones.style.gap = '4px';
+                containerBotones.style.marginTop = '4px';
+                
+                const btnVer = document.createElement('button');
+                btnVer.type = 'button';
+                btnVer.className = 'btn-accion-archivo';
+                btnVer.textContent = '👁';
+                btnVer.title = 'Ver archivo';
+                btnVer.onclick = () => verArchivoGasto(id, 'pdf');
+                
+                const btnEliminar = document.createElement('button');
+                btnEliminar.type = 'button';
+                btnEliminar.className = 'btn-accion-archivo btn-eliminar';
+                btnEliminar.textContent = '🗑';
+                btnEliminar.title = 'Eliminar archivo';
+                btnEliminar.onclick = () => eliminarArchivoPDFGasto(id);
+                
+                containerBotones.appendChild(btnVer);
+                containerBotones.appendChild(btnEliminar);
+                statusPDF.parentNode.appendChild(containerBotones);
+            }
+            
+            if (gasto.archivoXML) {
+                archivosXMLGastos[id] = gasto.archivoXML;
+                
+                // Agregar botones de acción para XML
+                const statusXML = document.getElementById(`statusXML_${id}`);
+                const containerBotones = document.createElement('div');
+                containerBotones.style.display = 'flex';
+                containerBotones.style.gap = '4px';
+                containerBotones.style.marginTop = '4px';
+                
+                const btnDescargar = document.createElement('button');
+                btnDescargar.type = 'button';
+                btnDescargar.className = 'btn-accion-archivo';
+                btnDescargar.textContent = '⬇';
+                btnDescargar.title = 'Descargar archivo';
+                btnDescargar.onclick = () => descargarArchivoGasto(id, 'xml');
+                
+                const btnEliminar = document.createElement('button');
+                btnEliminar.type = 'button';
+                btnEliminar.className = 'btn-accion-archivo btn-eliminar';
+                btnEliminar.textContent = '🗑';
+                btnEliminar.title = 'Eliminar archivo';
+                btnEliminar.onclick = () => eliminarArchivoXMLGasto(id);
+                
+                containerBotones.appendChild(btnDescargar);
+                containerBotones.appendChild(btnEliminar);
+                statusXML.parentNode.appendChild(containerBotones);
+            }
+        });
+        
+        // Calcular total
+        calcularTotalReembolso();
+    }
+    
+    // Marcar modo edición AL FINAL
+    finalizarConfiguracionEdicion(solicitudId, solicitud);
+}
+
+// Función helper para finalizar la configuración del modo edición
+function finalizarConfiguracionEdicion(id, solicitud) {
     // Marcar que estamos editando (guardar el ID)
-    document.getElementById('solicitudForm').setAttribute('data-editing-id', id);
+    const form = document.getElementById('solicitudForm');
+    form.setAttribute('data-editing-id', id);
+    console.log('Atributo data-editing-id establecido:', form.getAttribute('data-editing-id'));
     
     // Cambiar el texto del botón
     const submitButton = document.querySelector('#solicitudForm button[type="submit"]');
@@ -2314,6 +2689,29 @@ function editarSolicitud(id) {
         btnCancelar.style.display = 'inline-block';
     }
 
+    console.log('=== MODO EDICIÓN ACTIVADO ===');
+    alert('Editando solicitud ' + solicitud.numero + '. Modifique los campos necesarios y presione "Actualizar Solicitud"');
+}
+
+// Nueva función helper para finalizar la configuración del modo edición
+function finalizarConfiguracionEdicion(id, solicitud) {
+    // Marcar que estamos editando (guardar el ID)
+    const form = document.getElementById('solicitudForm');
+    form.setAttribute('data-editing-id', id);
+    console.log('Atributo data-editing-id establecido:', form.getAttribute('data-editing-id'));
+    
+    // Cambiar el texto del botón
+    const submitButton = document.querySelector('#solicitudForm button[type="submit"]');
+    submitButton.textContent = 'Actualizar Solicitud';
+    submitButton.style.background = '#ffc107';
+
+    // Mostrar botón cancelar
+    const btnCancelar = document.getElementById('btnCancelarEdicion');
+    if (btnCancelar) {
+        btnCancelar.style.display = 'inline-block';
+    }
+
+    console.log('=== MODO EDICIÓN ACTIVADO ===');
     alert('Editando solicitud ' + solicitud.numero + '. Modifique los campos necesarios y presione "Actualizar Solicitud"');
 }
 
@@ -2869,7 +3267,7 @@ async function autorizarSolicitud(id) {
             solicitud.fechaAutorizacion = new Date().toISOString();
             
             await actualizarSolicitudSupabase(solicitud);
-            await cargarDatosDesdeSupabase();
+            await cargarSolicitudesSupabase(); // Recargar solicitudes
             cargarSolicitudes();
             alert('Solicitud autorizada exitosamente');
         }
@@ -2883,7 +3281,7 @@ async function cancelarSolicitud(id) {
             solicitud.estado = 'cancelada';
             
             await actualizarSolicitudSupabase(solicitud);
-            await cargarDatosDesdeSupabase();
+            await cargarSolicitudesSupabase(); // Recargar solicitudes
             cargarSolicitudes();
             alert('Solicitud cancelada');
         }
@@ -3231,7 +3629,7 @@ function gestionarArchivos(solicitudId) {
 }
 
 // Abrir modal para subir factura (PDF y XML) a una solicitud normal
-function subirFacturaSolicitud(solicitudId) {
+async function subirFacturaSolicitud(solicitudId) {
     const solicitud = solicitudes.find(s => s.id === solicitudId);
     if (!solicitud) {
         alert('Solicitud no encontrada');
@@ -3243,7 +3641,6 @@ function subirFacturaSolicitud(solicitudId) {
         return;
     }
     
-    // Usar el mismo modal de archivos existente
     solicitudActualArchivos = solicitudId;
     
     const modal = document.getElementById('archivosModal');
@@ -3258,15 +3655,23 @@ function subirFacturaSolicitud(solicitudId) {
         </p>
     `;
     
-    if (!solicitud.archivos) {
-        solicitud.archivos = [];
+    // ✅ CARGAR ARCHIVOS BAJO DEMANDA (solo si no están ya cargados)
+    if (!solicitud.archivos || solicitud.archivos.length === 0) {
+        mostrarCargando(true);
+        try {
+            await cargarArchivosDeUnaolicitud(solicitudId);
+        } catch (error) {
+            console.error('Error al cargar archivos:', error);
+        } finally {
+            mostrarCargando(false);
+        }
     }
     
     const puedeDescargar = tienePermiso('descargar_archivos');
     
     let htmlArchivos = '<h4>Archivos Subidos:</h4>';
     
-    if (solicitud.archivos.length === 0) {
+    if (!solicitud.archivos || solicitud.archivos.length === 0) {
         htmlArchivos += '<p style="color: #999;">No hay archivos subidos</p>';
     } else {
         solicitud.archivos.forEach((archivo, index) => {
@@ -3304,12 +3709,23 @@ function subirFacturaSolicitud(solicitudId) {
     modal.style.display = 'block';
 }
 
-// Descargar todos los archivos de una solicitud en ZIP
+// Descargar todos los archivos de una solicitud en ZIP. Bajo demanda
 async function descargarArchivosZip(solicitudId) {
     const solicitud = solicitudes.find(s => s.id === solicitudId);
     if (!solicitud) {
         alert('Solicitud no encontrada');
         return;
+    }
+    
+    mostrarCargando(true);
+    
+    // ✅ CARGAR ARCHIVOS BAJO DEMANDA si no están cargados
+    if (!solicitud.archivos || solicitud.archivos.length === 0) {
+        try {
+            await cargarArchivosDeUnaSolicitud(solicitudId);
+        } catch (error) {
+            console.error('Error al cargar archivos:', error);
+        }
     }
     
     const zip = new JSZip();
@@ -3352,12 +3768,12 @@ async function descargarArchivosZip(solicitudId) {
         }
         
         if (totalArchivos === 0) {
+            mostrarCargando(false);
             alert('No hay archivos para descargar en esta solicitud');
             return;
         }
         
         // Generar el ZIP
-        mostrarCargando(true);
         const content = await zip.generateAsync({type: 'blob'});
         mostrarCargando(false);
         
@@ -3530,6 +3946,10 @@ function cargarUsuarios() {
     });
 }
 
+function editarUsuario(username) {
+    mostrarFormularioUsuario(username);
+}
+
 function mostrarFormularioUsuario(username = null) {
     if (!tienePermiso('gestionar_usuarios')) {
         alert('No tiene permisos para gestionar usuarios');
@@ -3552,18 +3972,57 @@ function mostrarFormularioUsuario(username = null) {
         option.textContent = rolesConfig[codigoRol].nombre;
         rolSelect.appendChild(option);
     });
+
+    // ✅ AGREGAR EVENTO EXPLÍCITAMENTE
+    rolSelect.onchange = toggleSucursalField;
     
     if (username) {
+        // MODO EDICIÓN
         title.textContent = 'Editar Usuario';
         const usuario = usuarios[username];
+        
         document.getElementById('usuarioUsername').value = username;
         document.getElementById('usuarioUsername').readOnly = true;
         document.getElementById('usuarioNombre').value = usuario.nombre;
         document.getElementById('usuarioPassword').value = usuario.password;
         document.getElementById('usuarioRol').value = usuario.rol;
         document.getElementById('usuarioSucursal').value = usuario.sucursal || '';
+        
+        // ✅ NUEVO: Cargar gerencia
+        if (usuario.gerencia) {
+            document.getElementById('usuarioGerencia').value = usuario.gerencia;
+        }
+        
+        // ✅ NUEVO: Cargar empresa (Contabilidad - una sola)
+        if (usuario.empresaId) {
+            // Primero hacer visible el campo y llenarlo
+            toggleSucursalField();
+            setTimeout(() => {
+                document.getElementById('usuarioEmpresa').value = usuario.empresaId;
+            }, 100);
+        }
+        
+        // ✅ NUEVO: Cargar empresas (Tesorería - múltiples)
+        if (usuario.empresasIds && usuario.empresasIds.length > 0) {
+            // Primero hacer visible el campo y llenarlo
+            toggleSucursalField();
+            setTimeout(() => {
+                const empresasSelect = document.getElementById('usuarioEmpresas');
+                if (empresasSelect && empresasSelect.options.length > 0) {
+                    Array.from(empresasSelect.options).forEach(option => {
+                        if (usuario.empresasIds.includes(parseInt(option.value))) {
+                            option.selected = true;
+                        }
+                    });
+                }
+            }, 100);
+        }
+        
+        // Actualizar campos visibles según el rol
         toggleSucursalField();
+        
     } else {
+        // MODO CREACIÓN
         title.textContent = 'Nuevo Usuario';
         document.getElementById('usuarioUsername').readOnly = false;
     }
@@ -3571,8 +4030,78 @@ function mostrarFormularioUsuario(username = null) {
     modal.style.display = 'block';
 }
 
-function editarUsuario(username) {
-    mostrarFormularioUsuario(username);
+function toggleSucursalField() {
+    console.log('🔍 toggleSucursalField llamada');
+    
+    const rol = document.getElementById('usuarioRol').value;
+    console.log('Rol seleccionado:', rol);
+    
+    const rolConfig = rolesConfig[rol];
+    console.log('Configuración del rol:', rolConfig);
+    console.log('requiereGerencia:', rolConfig?.requiereGerencia);
+    
+    // Campo Sucursal
+    const sucursalGroup = document.getElementById('usuarioSucursalGroup');
+    const sucursalSelect = document.getElementById('usuarioSucursal');
+    
+    console.log('sucursalGroup:', sucursalGroup);
+    
+    if (rolConfig && rolConfig.requiereSucursal) {
+        sucursalGroup.style.display = 'block';
+        sucursalSelect.required = true;
+    } else {
+        sucursalGroup.style.display = 'none';
+        sucursalSelect.required = false;
+        sucursalSelect.value = '';
+    }
+    
+    // ✅ Campo Gerencia
+    const gerenciaGroup = document.getElementById('usuarioGerenciaGroup');
+    const gerenciaSelect = document.getElementById('usuarioGerencia');
+    
+    console.log('🔍 gerenciaGroup encontrado:', gerenciaGroup);
+    console.log('🔍 gerenciaSelect encontrado:', gerenciaSelect);
+    
+    if (rolConfig && rolConfig.requiereGerencia) {
+        console.log('✅ Mostrando campo de gerencia');
+        gerenciaGroup.style.display = 'block';
+        gerenciaSelect.required = true;
+    } else {
+        console.log('❌ Ocultando campo de gerencia');
+        gerenciaGroup.style.display = 'none';
+        gerenciaSelect.required = false;
+        gerenciaSelect.value = '';
+    }
+    
+    // Campo Empresa (Contabilidad - una sola)
+    const empresaGroup = document.getElementById('usuarioEmpresaGroup');
+    const empresaSelect = document.getElementById('usuarioEmpresa');
+    
+    if (rolConfig && rolConfig.requiereEmpresa) {
+        empresaGroup.style.display = 'block';
+        empresaSelect.required = true;
+        // Llenar con empresas disponibles
+        cargarEmpresasEnSelect(empresaSelect, false);
+    } else {
+        empresaGroup.style.display = 'none';
+        empresaSelect.required = false;
+        empresaSelect.value = '';
+    }
+    
+    // Campo Empresas (Tesorería - múltiples)
+    const empresasGroup = document.getElementById('usuarioEmpresasGroup');
+    const empresasSelect = document.getElementById('usuarioEmpresas');
+    
+    if (rolConfig && rolConfig.requiereEmpresas) {
+        empresasGroup.style.display = 'block';
+        empresasSelect.required = true;
+        // Llenar con empresas disponibles
+        cargarEmpresasEnSelect(empresasSelect, true);
+    } else {
+        empresasGroup.style.display = 'none';
+        empresasSelect.required = false;
+        empresasSelect.innerHTML = '';
+    }
 }
 
 function eliminarUsuario(username) {
@@ -3589,21 +4118,6 @@ function eliminarUsuario(username) {
     }
 }
 
-function toggleSucursalField() {
-    const rol = document.getElementById('usuarioRol').value;
-    const sucursalGroup = document.getElementById('usuarioSucursalGroup');
-    const sucursalSelect = document.getElementById('usuarioSucursal');
-    
-    if (rol && rolesConfig[rol] && rolesConfig[rol].requiereSucursal) {
-        sucursalGroup.style.display = 'block';
-        sucursalSelect.required = true;
-    } else {
-        sucursalGroup.style.display = 'none';
-        sucursalSelect.required = false;
-        sucursalSelect.value = '';
-    }
-}
-
 function guardarUsuario(event) {
     event.preventDefault();
     
@@ -3612,6 +4126,16 @@ function guardarUsuario(event) {
     const password = document.getElementById('usuarioPassword').value;
     const rol = document.getElementById('usuarioRol').value;
     const sucursal = document.getElementById('usuarioSucursal').value || null;
+    const gerencia = document.getElementById('usuarioGerencia').value || null;  // ✅ NUEVO
+    const empresaId = document.getElementById('usuarioEmpresa').value || null;  // ✅ NUEVO
+    
+    // ✅ NUEVO: Obtener múltiples empresas para Tesorería
+    let empresasIds = null;
+    const empresasSelect = document.getElementById('usuarioEmpresas');
+    if (empresasSelect && empresasSelect.options.length > 0) {
+        empresasIds = Array.from(empresasSelect.selectedOptions).map(opt => parseInt(opt.value));
+        if (empresasIds.length === 0) empresasIds = null;
+    }
     
     if (!editandoUsuario && usuarios[username]) {
         alert('El usuario ya existe');
@@ -3622,7 +4146,10 @@ function guardarUsuario(event) {
         password: password,
         rol: rol,
         sucursal: sucursal,
-        nombre: nombre
+        nombre: nombre,
+        gerencia: gerencia,        // ✅ NUEVO
+        empresaId: empresaId ? parseInt(empresaId) : null,  // ✅ NUEVO
+        empresasIds: empresasIds   // ✅ NUEVO
     };
     
     guardarUsuariosEnStorage();
@@ -3772,7 +4299,7 @@ async function eliminarProveedor(id) {
             if (index > -1) {
                 beneficiarios.splice(index, 1);
             }
-            await cargarDatosDesdeSupabase();
+            await cargarBeneficiariosSupabase(true); // Forzar recarga
             cargarProveedores();
             cargarBeneficiariosSelect();
             alert('Proveedor eliminado exitosamente');
@@ -3793,9 +4320,6 @@ async function guardarProveedor(event) {
     const cuenta = document.getElementById('proveedorCuenta').value;
     const clabe = document.getElementById('proveedorClabe').value;
     
-    // console.log('===== DEBUGGING GUARDAR PROVEEDOR =====');
-    // console.log('Tipo capturado:', tipo);
-    
     try {
         if (editandoProveedor) {
             const proveedor = beneficiarios.find(b => b.id === editandoProveedor);
@@ -3808,18 +4332,15 @@ async function guardarProveedor(event) {
                 proveedor.cuenta = cuenta;
                 proveedor.clabe = clabe;
                 
-                //console.log('Proveedor actualizado:', proveedor);
-                
                 if (usarSupabase) {
                     await guardarBeneficiarioSupabase(proveedor);
-                    await cargarDatosDesdeSupabase(); // Recargar para obtener datos actualizados
+                    await cargarBeneficiariosSupabase(true); // Forzar recarga
                 } else {
                     guardarDatosLocalStorage();
                 }
             }
         } else {
             const nuevoProveedor = {
-                // NO incluir ID, lo genera Supabase automáticamente
                 nombre: nombre,
                 razonSocial: razonSocial,
                 rfc: rfc,
@@ -3830,14 +4351,10 @@ async function guardarProveedor(event) {
                 csf: null
             };
             
-            //console.log('Nuevo proveedor a guardar:', nuevoProveedor);
-            
             if (usarSupabase) {
                 const proveedorGuardado = await guardarBeneficiarioSupabase(nuevoProveedor);
-                //console.log('Proveedor guardado desde Supabase:', proveedorGuardado);
-                await cargarDatosDesdeSupabase(); // Recargar para obtener la lista actualizada
+                await cargarBeneficiariosSupabase(true); // Forzar recarga
             } else {
-                // Para localStorage, generar un ID único
                 nuevoProveedor.id = Date.now();
                 beneficiarios.push(nuevoProveedor);
                 guardarDatosLocalStorage();
@@ -3849,8 +4366,6 @@ async function guardarProveedor(event) {
         cargarProveedores();
         cargarBeneficiariosSelect();
         cargarBeneficiariosSelectCajaChica();
-        
-        console.log('Beneficiarios después de guardar:', beneficiarios);
         
         alert(editandoProveedor ? 'Proveedor actualizado exitosamente' : 'Proveedor creado exitosamente');
     } catch (error) {
@@ -4002,6 +4517,22 @@ function cargarEmpresas() {
     });
 }
 
+// Nueva función auxiliar para cargar empresas en los selects
+function cargarEmpresasEnSelect(selectElement, multiple) {
+    if (!multiple) {
+        selectElement.innerHTML = '<option value="">Seleccione empresa</option>';
+    } else {
+        selectElement.innerHTML = '';
+    }
+    
+    empresas.forEach(empresa => {
+        const option = document.createElement('option');
+        option.value = empresa.id;
+        option.textContent = `${empresa.razonSocial} (${empresa.rfc})`;
+        selectElement.appendChild(option);
+    });
+}
+
 function mostrarFormularioEmpresa(id = null) {
     if (!verificarPermisoAdmin()) return;
     
@@ -4038,7 +4569,7 @@ async function eliminarEmpresa(id) {
             if (index > -1) {
                 empresas.splice(index, 1);
             }
-            await cargarDatosDesdeSupabase();
+            await cargarEmpresasSupabase(true); // Forzar recarga
             cargarEmpresas();
             cargarEmpresasSelect();
             alert('Empresa eliminada exitosamente');
@@ -4061,18 +4592,17 @@ async function guardarEmpresa(event) {
                 empresa.razonSocial = razonSocial;
                 empresa.rfc = rfc;
                 await guardarEmpresaSupabase(empresa);
-                await cargarDatosDesdeSupabase();
+                await cargarEmpresasSupabase(true); // Forzar recarga
             }
         } else {
             const nuevaEmpresa = {
-                // NO incluir ID
                 razonSocial: razonSocial,
                 rfc: rfc
             };
             
             if (usarSupabase) {
                 await guardarEmpresaSupabase(nuevaEmpresa);
-                await cargarDatosDesdeSupabase();
+                await cargarEmpresasSupabase(true); // Forzar recarga
             } else {
                 nuevaEmpresa.id = Date.now();
                 empresas.push(nuevaEmpresa);
@@ -4176,7 +4706,7 @@ async function marcarComoPagada(solicitudId, estaPagada) {
         }
         
         await actualizarSolicitudSupabase(solicitud);
-        await cargarDatosDesdeSupabase();
+        await cargarSolicitudesSupabase(); // Recargar solicitudes
         cargarSolicitudes();
     }
 }
@@ -4659,5 +5189,66 @@ async function descargarArchivosGastosZip(solicitudId) {
         });
         
         alert('Descargando archivos...');
+    }
+}
+
+async function eliminarSolicitud(id) {
+    // Verificar que solo el admin pueda eliminar
+    if (!usuarioActual || usuarioActual.rol !== 'admin') {
+        alert('Solo el administrador puede eliminar solicitudes de la base de datos');
+        return;
+    }
+    
+    const solicitud = solicitudes.find(s => s.id === id);
+    if (!solicitud) {
+        alert('Solicitud no encontrada');
+        return;
+    }
+    
+    // Confirmación con advertencia fuerte
+    const confirmacion = confirm(
+        `⚠️ ADVERTENCIA: Esta acción es IRREVERSIBLE ⚠️\n\n` +
+        `¿Está completamente seguro de ELIMINAR PERMANENTEMENTE la siguiente solicitud?\n\n` +
+        `Número: ${solicitud.numero}\n` +
+        `Proveedor: ${solicitud.proveedor}\n` +
+        `Concepto: ${solicitud.conceptoGeneral}\n` +
+        `Total: $${solicitud.total.toLocaleString('es-MX', {minimumFractionDigits: 2})}\n` +
+        `Estado: ${solicitud.estado}\n\n` +
+        `Esta solicitud será eliminada COMPLETAMENTE de la base de datos.`
+    );
+    
+    if (!confirmacion) return;
+    
+    // Segunda confirmación
+    const segundaConfirmacion = confirm(
+        `¿REALMENTE desea eliminar la solicitud ${solicitud.numero}?\n\n` +
+        `Esta es su última oportunidad para cancelar.`
+    );
+    
+    if (!segundaConfirmacion) return;
+    
+    try {
+        mostrarCargando(true);
+        
+        // Eliminar de Supabase
+        await eliminarSolicitudSupabase(id);
+        
+        // Eliminar del array local
+        const index = solicitudes.findIndex(s => s.id === id);
+        if (index > -1) {
+            solicitudes.splice(index, 1);
+        }
+        
+        mostrarCargando(false);
+        
+        // Recargar la tabla
+        cargarSolicitudes();
+        
+        alert(`✓ Solicitud ${solicitud.numero} eliminada permanentemente de la base de datos`);
+        
+    } catch (error) {
+        mostrarCargando(false);
+        console.error('Error al eliminar solicitud:', error);
+        alert('Error al eliminar la solicitud: ' + error.message);
     }
 }

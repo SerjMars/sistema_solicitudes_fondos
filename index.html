@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="supabase-config.js"></script>
     <script src="supabase-functions.js"></script>
+    <script src="organigrama.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -57,9 +58,14 @@
         <div id="solicitudesTab" class="tab-content">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h3>Lista de Solicitudes</h3>
-                <button class="btn" onclick="exportarSolicitudesCSV()" style="background: #28a745;">
-                    <span style="font-size: 14px;">📥</span> Exportar a CSV
-                </button>
+                <div>
+                    <button class="btn" onclick="refrescarTodosDatos()" style="background: #17a2b8;">
+                    <span style="font-size: 14px;">🔄</span> Refrescar
+                    </button>
+                    <button class="btn" onclick="exportarSolicitudesCSV()" style="background: #28a745;">
+                        <span style="font-size: 14px;">📥</span> Exportar a CSV
+                    </button>
+                </div>
             </div>
             <div class="table-container">
                 <table id="solicitudesTable">
@@ -123,9 +129,8 @@
                                 <option value="MTY">Monterrey</option>
                                 <option value="GDL">Guadalajara</option>
                                 <option value="VSA">Villahermosa</option>
-                                <option value="CDMX">Ciudad de México</option>
                                 <option value="GCC">Gerencia Centro</option>
-                                <option value="GCS">Gerencia de Departamentos</option>
+                                <option value="GCS">Gerencia Sucursales</option>
                                 <option value="DOP">Dirección de Operaciones</option>
                                 <option value="DIR">Dirección General</option>
                                 <option value="CMP">Compras</option>
@@ -533,6 +538,33 @@
                         <option value="">Seleccione rol</option>
                     </select>
                 </div>
+                <!-- Campo de Gerencia (para jefes y coordinadores) -->
+                <div class="form-group" id="usuarioGerenciaGroup" style="display: none;">
+                    <label for="usuarioGerencia">Gerencia a la que pertenece: *</label>
+                    <select id="usuarioGerencia">
+                        <option value="">Seleccione gerencia</option>
+                        <option value="GCS">Gerencia de Sucursales</option>
+                        <option value="GCC">Gerencia de Centro</option>
+                    </select>
+                </div>
+
+                <!-- Campo de Empresa (para Contabilidad - una sola) -->
+                <div class="form-group" id="usuarioEmpresaGroup" style="display: none;">
+                    <label for="usuarioEmpresa">Empresa asignada: *</label>
+                    <select id="usuarioEmpresa">
+                        <option value="">Seleccione empresa</option>
+                        <!-- Se llenará dinámicamente con empresas -->
+                    </select>
+                </div>
+
+                <!-- Campo de Empresas (para Tesorería - múltiples) -->
+                <div class="form-group" id="usuarioEmpresasGroup" style="display: none;">
+                    <label for="usuarioEmpresas">Empresas asignadas: *</label>
+                    <select id="usuarioEmpresas" multiple size="5">
+                        <!-- Se llenará dinámicamente con empresas -->
+                    </select>
+                    <small style="color: #666;">Mantén presionada la tecla Ctrl (o Cmd en Mac) para seleccionar múltiples empresas</small>
+                </div>
                 <div class="form-group" id="usuarioSucursalGroup" style="display: none;">
                     <label for="usuarioSucursal">Departamento:</label>
                     <select id="usuarioSucursal">
@@ -543,9 +575,8 @@
                         <option value="MTY">Monterrey</option>
                         <option value="GDL">Guadalajara</option>
                         <option value="VSA">Villahermosa</option>
-                        <option value="CDMX">Ciudad de México</option>
                         <option value="GCC">Gerencia Centro</option>
-                        <option value="GCS">Gerencia de Departamentos</option>
+                        <option value="GCS">Gerencia Sucursales</option>
                         <option value="DOP">Dirección de Operaciones</option>
                         <option value="DIR">Dirección General</option>
                         <option value="CMP">Compras</option>
