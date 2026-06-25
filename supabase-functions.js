@@ -1,63 +1,67 @@
 // ============================================
-// FUNCIONES DE SUPABASE CON CACHE Y CARGA SELECTIVA
+// supabase-functions.js - VERSIÓN CORREGIDA
 // ============================================
 
+// Verificar que supabase esté disponible
+if (!window.supabase) {
+    console.error('❌ ERROR CRÍTICO: supabase no está disponible en window');
+}
+if (typeof window.usarSupabase === 'undefined') {
+    console.error('❌ ERROR CRÍTICO: usarSupabase no está disponible en window');
+    window.usarSupabase = false;
+}
+
 // Variables globales para control de caché
-let ultimaActualizacion = {
+window.ultimaActualizacion = {
     empresas: null,
     beneficiarios: null,
     solicitudes: null
 };
 
-const TIEMPO_CACHE = 5 * 60 * 1000; // 5 minutos en milisegundos
+const TIEMPO_CACHE = 5 * 60 * 1000; // 5 minutos
 
 // ============================================
 // CARGA INICIAL (solo datos maestros)
 // ============================================
-async function cargarDatosDesdeSupabase(forzarRecarga = false) {
-    if (!usarSupabase) {
-        cargarDatosLocalStorage();
+window.cargarDatosDesdeSupabase = async function(forzarRecarga = false) {
+    if (!window.usarSupabase) {
+        window.cargarDatosLocalStorage();
         return;
     }
     
     try {
-        mostrarCargando(true);
+        window.mostrarCargando(true);
         
-        // Cargar en paralelo empresas y beneficiarios
         await Promise.all([
-            cargarEmpresasSupabase(forzarRecarga),
-            cargarBeneficiariosSupabase(forzarRecarga)
+            window.cargarEmpresasSupabase(forzarRecarga),
+            window.cargarBeneficiariosSupabase(forzarRecarga)
         ]);
         
-        console.log('✓ Datos maestros cargados');
-        mostrarCargando(false);
+        window.mostrarCargando(false);
         
     } catch (error) {
         console.error('Error al cargar desde Supabase:', error);
-        cargarDatosLocalStorage();
-        mostrarCargando(false);
+        window.cargarDatosLocalStorage();
+        window.mostrarCargando(false);
     }
 }
 
 // ============================================
 // CARGAR EMPRESAS CON CACHE
 // ============================================
-async function cargarEmpresasSupabase(forzarRecarga = false) {
+window.cargarEmpresasSupabase = async function(forzarRecarga = false) {
     const ahora = Date.now();
     
-    // Verificar si usar caché
-    if (!forzarRecarga && ultimaActualizacion.empresas && (ahora - ultimaActualizacion.empresas) < TIEMPO_CACHE) {
+    if (!forzarRecarga && window.ultimaActualizacion.empresas && (ahora - window.ultimaActualizacion.empresas) < TIEMPO_CACHE) {
         const cache = localStorage.getItem('empresas_cache');
         if (cache) {
-            empresas = JSON.parse(cache);
-            console.log('✓ Empresas cargadas desde caché');
+            window.empresas = JSON.parse(cache);
             return;
         }
     }
     
-    // Cargar desde Supabase
     try {
-        const { data: empresasData, error: empresasError } = await supabaseClient
+        const { data: empresasData, error: empresasError } = await window.supabase
             .from('empresas')
             .select('id, razon_social, rfc')
             .order('id', { ascending: true });
@@ -65,26 +69,21 @@ async function cargarEmpresasSupabase(forzarRecarga = false) {
         if (empresasError) throw empresasError;
         
         if (empresasData && empresasData.length > 0) {
-            empresas = empresasData.map(e => ({
+            window.empresas = empresasData.map(e => ({
                 id: e.id,
                 razonSocial: e.razon_social,
                 rfc: e.rfc
             }));
             
-            // Guardar en caché
-            localStorage.setItem('empresas_cache', JSON.stringify(empresas));
+            localStorage.setItem('empresas_cache', JSON.stringify(window.empresas));
             localStorage.setItem('empresas_cache_timestamp', ahora.toString());
-            ultimaActualizacion.empresas = ahora;
-            
-            console.log('✓ Empresas cargadas desde Supabase');
+            window.ultimaActualizacion.empresas = ahora;
         }
     } catch (error) {
         console.error('Error al cargar empresas:', error);
-        // Intentar cargar desde caché aunque esté vencido
         const cache = localStorage.getItem('empresas_cache');
         if (cache) {
-            empresas = JSON.parse(cache);
-            console.log('⚠ Usando caché vencido de empresas');
+            window.empresas = JSON.parse(cache);
         }
     }
 }
@@ -92,22 +91,19 @@ async function cargarEmpresasSupabase(forzarRecarga = false) {
 // ============================================
 // CARGAR BENEFICIARIOS CON CACHE
 // ============================================
-async function cargarBeneficiariosSupabase(forzarRecarga = false) {
+window.cargarBeneficiariosSupabase = async function(forzarRecarga = false) {
     const ahora = Date.now();
     
-    // Verificar si usar caché
-    if (!forzarRecarga && ultimaActualizacion.beneficiarios && (ahora - ultimaActualizacion.beneficiarios) < TIEMPO_CACHE) {
+    if (!forzarRecarga && window.ultimaActualizacion.beneficiarios && (ahora - window.ultimaActualizacion.beneficiarios) < TIEMPO_CACHE) {
         const cache = localStorage.getItem('beneficiarios_cache');
         if (cache) {
-            beneficiarios = JSON.parse(cache);
-            console.log('✓ Beneficiarios cargados desde caché');
+            window.beneficiarios = JSON.parse(cache);
             return;
         }
     }
     
-    // Cargar desde Supabase
     try {
-        const { data: beneficiariosData, error: beneficiariosError } = await supabaseClient
+        const { data: beneficiariosData, error: beneficiariosError } = await window.supabase
             .from('beneficiarios')
             .select('id, nombre, razon_social, rfc, tipo, banco, cuenta, clabe, csf')
             .order('id', { ascending: true });
@@ -115,7 +111,7 @@ async function cargarBeneficiariosSupabase(forzarRecarga = false) {
         if (beneficiariosError) throw beneficiariosError;
         
         if (beneficiariosData && beneficiariosData.length > 0) {
-            beneficiarios = beneficiariosData.map(b => ({
+            window.beneficiarios = beneficiariosData.map(b => ({
                 id: b.id,
                 nombre: b.nombre,
                 razonSocial: b.razon_social,
@@ -127,20 +123,15 @@ async function cargarBeneficiariosSupabase(forzarRecarga = false) {
                 csf: b.csf
             }));
             
-            // Guardar en caché
-            localStorage.setItem('beneficiarios_cache', JSON.stringify(beneficiarios));
+            localStorage.setItem('beneficiarios_cache', JSON.stringify(window.beneficiarios));
             localStorage.setItem('beneficiarios_cache_timestamp', ahora.toString());
-            ultimaActualizacion.beneficiarios = ahora;
-            
-            console.log('✓ Beneficiarios cargados desde Supabase');
+            window.ultimaActualizacion.beneficiarios = ahora;
         }
     } catch (error) {
         console.error('Error al cargar beneficiarios:', error);
-        // Intentar cargar desde caché aunque esté vencido
         const cache = localStorage.getItem('beneficiarios_cache');
         if (cache) {
-            beneficiarios = JSON.parse(cache);
-            console.log('⚠ Usando caché vencido de beneficiarios');
+            window.beneficiarios = JSON.parse(cache);
         }
     }
 }
@@ -148,20 +139,19 @@ async function cargarBeneficiariosSupabase(forzarRecarga = false) {
 // ============================================
 // CARGAR SOLICITUDES (bajo demanda, SIN archivos)
 // ============================================
-async function cargarSolicitudesSupabase(forzarRecarga = true) {
-    if (!usarSupabase) {
+window.cargarSolicitudesSupabase = async function(forzarRecarga = true) {
+    if (!window.usarSupabase) {
         const solicitudesGuardadas = localStorage.getItem('solicitudes');
         if (solicitudesGuardadas) {
-            solicitudes = JSON.parse(solicitudesGuardadas);
+            window.solicitudes = JSON.parse(solicitudesGuardadas);
         }
         return;
     }
     
     try {
-        mostrarCargando(true);
+        window.mostrarCargando(true);
         
-        // ✅ CAMBIO CRÍTICO: No traer archivos en la carga inicial
-        const { data: solicitudesData, error: solicitudesError } = await supabaseClient
+        const { data: solicitudesData, error: solicitudesError } = await window.supabase
             .from('solicitudes')
             .select(`
                 id,
@@ -194,14 +184,16 @@ async function cargarSolicitudesSupabase(forzarRecarga = true) {
                 fecha_pago,
                 creado_por,
                 tipo_formato,
-                gastos_caja_chica
-            `)  // ⚠️ NO incluir 'archivos' aquí
+                gastos_caja_chica,
+                flujo_autorizacion,
+                rechazo
+            `)
             .order('id', { ascending: false });
         
         if (solicitudesError) throw solicitudesError;
         
         if (solicitudesData && solicitudesData.length > 0) {
-            solicitudes = solicitudesData.map(s => {
+            window.solicitudes = solicitudesData.map(s => {
                 let gastosCajaChica = null;
                 if (s.gastos_caja_chica) {
                     try {
@@ -209,7 +201,7 @@ async function cargarSolicitudesSupabase(forzarRecarga = true) {
                             ? JSON.parse(s.gastos_caja_chica) 
                             : s.gastos_caja_chica;
                     } catch (e) {
-                        console.error('Error al parsear gastos_caja_chica para solicitud', s.id, ':', e);
+                        console.error('Error al parsear gastos_caja_chica para solicitud', s.id);
                         gastosCajaChica = null;
                     }
                 }
@@ -239,134 +231,72 @@ async function cargarSolicitudesSupabase(forzarRecarga = true) {
                     fechaSolicitud: s.fecha_solicitud,
                     fechaAutorizacion: s.fecha_autorizacion,
                     solicitudesVinculadas: s.solicitudes_vinculadas || [],
-                    archivos: [], // ✅ Inicializar vacío, se cargará bajo demanda
-                    comprobantePago: s.comprobante_pago_url ? {
-                        nombre: s.comprobante_pago_nombre,
-                        datos: s.comprobante_pago_url
+                    archivos: [],
+                    comprobantePago: s.comprobante_pago_url && s.comprobante_pago_nombre ? {
+                        datos: s.comprobante_pago_url,
+                        nombre: s.comprobante_pago_nombre
                     } : null,
                     pagada: s.pagada || false,
                     fechaPago: s.fecha_pago,
                     creadoPor: s.creado_por,
                     tipoFormato: s.tipo_formato || 'normal',
-                    gastosCajaChica: gastosCajaChica
+                    gastosCajaChica: gastosCajaChica,
+                    flujoAutorizacion: s.flujo_autorizacion
+                        ? (typeof s.flujo_autorizacion === 'string' ? JSON.parse(s.flujo_autorizacion) : s.flujo_autorizacion)
+                        : null,
+                    rechazo: s.rechazo
+                        ? (typeof s.rechazo === 'string' ? JSON.parse(s.rechazo) : s.rechazo)
+                        : null
                 };
             });
-            
-            console.log('✓ Solicitudes cargadas desde Supabase (sin archivos adjuntos)');
         }
         
-        mostrarCargando(false);
+        window.mostrarCargando(false);
         
     } catch (error) {
         console.error('Error al cargar solicitudes:', error);
-        mostrarCargando(false);
-        throw error;
+        const solicitudesGuardadas = localStorage.getItem('solicitudes');
+        if (solicitudesGuardadas) {
+            window.solicitudes = JSON.parse(solicitudesGuardadas);
+        }
+        window.mostrarCargando(false);
     }
 }
 
 // ============================================
-// CARGAR ARCHIVOS DE UNA SOLICITUD ESPECÍFICA (bajo demanda)
+// CARGAR DESDE LOCALSTORAGE (FALLBACK)
 // ============================================
-async function cargarArchivosDeUnasolicitud(solicitudId) {
-    if (!usarSupabase) return [];
-    
-    try {
-        const { data, error } = await supabaseClient
-            .from('solicitudes')
-            .select('archivos')
-            .eq('id', solicitudId)
-            .single();
-        
-        if (error) throw error;
-        
-        // Parsear archivos si vienen como string
-        let archivos = [];
-        if (data.archivos) {
-            try {
-                archivos = typeof data.archivos === 'string' 
-                    ? JSON.parse(data.archivos) 
-                    : data.archivos;
-            } catch (e) {
-                console.error('Error al parsear archivos:', e);
-                archivos = [];
-            }
-        }
-        
-        // Actualizar la solicitud en el array local
-        const solicitud = solicitudes.find(s => s.id === solicitudId);
-        if (solicitud) {
-            solicitud.archivos = archivos;
-        }
-        
-        return archivos;
-        
-    } catch (error) {
-        console.error('Error al cargar archivos de solicitud:', error);
-        return [];
-    }
-}
-
-// ============================================
-// FUNCIÓN PARA REFRESCAR TODO (botón manual)
-// ============================================
-async function refrescarTodosDatos() {
-    if (confirm('¿Desea recargar todos los datos desde el servidor?')) {
-        // Limpiar caché
-        localStorage.removeItem('empresas_cache');
-        localStorage.removeItem('beneficiarios_cache');
-        ultimaActualizacion = {
-            empresas: null,
-            beneficiarios: null,
-            solicitudes: null
-        };
-        
-        mostrarCargando(true);
-        
-        try {
-            await Promise.all([
-                cargarEmpresasSupabase(true),
-                cargarBeneficiariosSupabase(true),
-                cargarSolicitudesSupabase(true)
-            ]);
-            
-            // Recargar vistas
-            cargarEmpresas();
-            cargarProveedores();
-            cargarSolicitudes();
-            cargarBeneficiariosSelect();
-            cargarBeneficiariosSelectCajaChica();
-            cargarEmpresasSelect();
-            
-            alert('Datos actualizados correctamente');
-        } catch (error) {
-            alert('Error al actualizar datos');
-        } finally {
-            mostrarCargando(false);
-        }
-    }
-}
-
-// Cargar desde localStorage (fallback)
-function cargarDatosDesdeLocalStorage() {
+window.cargarDatosLocalStorage = function() {
     const solicitudesGuardadas = localStorage.getItem('solicitudes');
-    if (solicitudesGuardadas) solicitudes = JSON.parse(solicitudesGuardadas);
+    if (solicitudesGuardadas) window.solicitudes = JSON.parse(solicitudesGuardadas);
     
     const contadoresGuardados = localStorage.getItem('contadores');
-    if (contadoresGuardados) contadores = JSON.parse(contadoresGuardados);
+    if (contadoresGuardados) window.contadores = JSON.parse(contadoresGuardados);
     
-    const beneficiariosCache = localStorage.getItem('beneficiarios_cache');
-    if (beneficiariosCache) beneficiarios = JSON.parse(beneficiariosCache);
+    const beneficiariosGuardados = localStorage.getItem('beneficiarios');
+    if (beneficiariosGuardados) window.beneficiarios = JSON.parse(beneficiariosGuardados);
     
-    const empresasCache = localStorage.getItem('empresas_cache');
-    if (empresasCache) empresas = JSON.parse(empresasCache);
+    const empresasGuardadas = localStorage.getItem('empresas');
+    if (empresasGuardadas) window.empresas = JSON.parse(empresasGuardadas);
 }
 
 // ============================================
 // GUARDAR SOLICITUD EN SUPABASE
 // ============================================
-async function guardarSolicitudSupabase(solicitud) {
-    if (!usarSupabase) {
-        guardarDatosLocalStorage();
+// Incremento atómico del consecutivo por sucursal (evita folios duplicados
+// cuando dos personas crean una solicitud al mismo tiempo).
+window.obtenerSiguienteConsecutivoSupabase = async function(sucursal) {
+    const { data, error } = await window.supabase.rpc('siguiente_consecutivo', { p_sucursal: sucursal });
+    if (error) {
+        console.error('Error obteniendo siguiente consecutivo:', error);
+        throw error;
+    }
+    return data;
+}
+
+window.guardarSolicitudSupabase = async function(solicitud) {
+    if (!window.usarSupabase) {
+        window.guardarDatosLocalStorage();
         return solicitud;
     }
 
@@ -396,11 +326,12 @@ async function guardarSolicitudSupabase(solicitud) {
             fecha_solicitud: solicitud.fechaSolicitud,
             creado_por: solicitud.creadoPor,
             solicitudes_vinculadas: solicitud.solicitudesVinculadas ? JSON.stringify(solicitud.solicitudesVinculadas) : null,
+            flujo_autorizacion: solicitud.flujoAutorizacion ? JSON.stringify(solicitud.flujoAutorizacion) : null,
             tipo_formato: solicitud.tipoFormato || 'normal',
             gastos_caja_chica: solicitud.gastosCajaChica ? JSON.stringify(solicitud.gastosCajaChica) : null
         };
 
-        const { data, error } = await supabaseClient
+        const { data, error } = await window.supabase
             .from('solicitudes')
             .insert([solicitudDB])
             .select();
@@ -409,12 +340,6 @@ async function guardarSolicitudSupabase(solicitud) {
             console.error('Error de Supabase:', error);
             throw error;
         }
-
-        // Actualizar contador
-        await supabaseClient
-            .from('contadores')
-            .update({ contador: solicitud.numeroConsecutivo })
-            .eq('sucursal', solicitud.sucursal);
 
         return { ...solicitud, id: data[0].id };
     } catch (error) {
@@ -426,9 +351,9 @@ async function guardarSolicitudSupabase(solicitud) {
 // ============================================
 // ACTUALIZAR SOLICITUD EN SUPABASE
 // ============================================
-async function actualizarSolicitudSupabase(solicitud) {
-    if (!usarSupabase) {
-        guardarDatosLocalStorage();
+window.actualizarSolicitudSupabase = async function(solicitud) {
+    if (!window.usarSupabase) {
+        window.guardarDatosLocalStorage();
         return;
     }
 
@@ -458,10 +383,12 @@ async function actualizarSolicitudSupabase(solicitud) {
             comprobante_pago_nombre: solicitud.comprobantePago?.nombre || null,
             archivos: solicitud.archivos ? JSON.stringify(solicitud.archivos) : null,
             tipo_formato: solicitud.tipoFormato || 'normal',
-            gastos_caja_chica: solicitud.gastosCajaChica ? JSON.stringify(solicitud.gastosCajaChica) : null
+            gastos_caja_chica: solicitud.gastosCajaChica ? JSON.stringify(solicitud.gastosCajaChica) : null,
+            flujo_autorizacion: solicitud.flujoAutorizacion ? JSON.stringify(solicitud.flujoAutorizacion) : null,
+            rechazo: solicitud.rechazo ? JSON.stringify(solicitud.rechazo) : null
         };
 
-        const { error } = await supabaseClient
+        const { error } = await window.supabase
             .from('solicitudes')
             .update(solicitudDB)
             .eq('id', solicitud.id);
@@ -470,8 +397,6 @@ async function actualizarSolicitudSupabase(solicitud) {
             console.error('Error de Supabase al actualizar:', error);
             throw error;
         }
-        
-        console.log('✓ Actualización en Supabase exitosa');
         
     } catch (error) {
         console.error('Error actualizando solicitud:', error);
@@ -482,10 +407,12 @@ async function actualizarSolicitudSupabase(solicitud) {
 // ============================================
 // GUARDAR EMPRESA EN SUPABASE
 // ============================================
-async function guardarEmpresaSupabase(empresa) {
+window.guardarEmpresaSupabase = async function(empresa) {
     try {
+        window.ultimaActualizacion.empresas = null;
+        
         if (empresa.id && empresa.id < 2147483647) {
-            const { data, error } = await supabaseClient
+            const { data, error } = await window.supabase
                 .from('empresas')
                 .update({
                     razon_social: empresa.razonSocial,
@@ -497,16 +424,13 @@ async function guardarEmpresaSupabase(empresa) {
             
             if (error) throw error;
             
-            // Invalidar caché
-            ultimaActualizacion.empresas = null;
-            
             return {
                 id: data.id,
                 razonSocial: data.razon_social,
                 rfc: data.rfc
             };
         } else {
-            const { data, error } = await supabaseClient
+            const { data, error } = await window.supabase
                 .from('empresas')
                 .insert([{
                     razon_social: empresa.razonSocial,
@@ -516,9 +440,6 @@ async function guardarEmpresaSupabase(empresa) {
                 .single();
             
             if (error) throw error;
-            
-            // Invalidar caché
-            ultimaActualizacion.empresas = null;
             
             return {
                 id: data.id,
@@ -535,21 +456,20 @@ async function guardarEmpresaSupabase(empresa) {
 // ============================================
 // ELIMINAR EMPRESA DE SUPABASE
 // ============================================
-async function eliminarEmpresaSupabase(id) {
-    if (!usarSupabase) {
-        guardarDatosLocalStorage();
+window.eliminarEmpresaSupabase = async function(id) {
+    if (!window.usarSupabase) {
+        window.guardarDatosLocalStorage();
         return;
     }
 
     try {
-        const { error } = await supabaseClient
+        const { error } = await window.supabase
             .from('empresas')
             .delete()
             .eq('id', id);
         if (error) throw error;
         
-        // Invalidar caché
-        ultimaActualizacion.empresas = null;
+        window.ultimaActualizacion.empresas = null;
     } catch (error) {
         console.error('Error eliminando empresa:', error);
         throw error;
@@ -559,10 +479,12 @@ async function eliminarEmpresaSupabase(id) {
 // ============================================
 // GUARDAR BENEFICIARIO EN SUPABASE
 // ============================================
-async function guardarBeneficiarioSupabase(beneficiario) {
+window.guardarBeneficiarioSupabase = async function(beneficiario) {
     try {
+        window.ultimaActualizacion.beneficiarios = null;
+        
         if (beneficiario.id && beneficiario.id < 2147483647) {
-            const { data, error } = await supabaseClient
+            const { data, error } = await window.supabase
                 .from('beneficiarios')
                 .update({
                     nombre: beneficiario.nombre,
@@ -580,9 +502,6 @@ async function guardarBeneficiarioSupabase(beneficiario) {
             
             if (error) throw error;
             
-            // Invalidar caché
-            ultimaActualizacion.beneficiarios = null;
-            
             return {
                 id: data.id,
                 nombre: data.nombre,
@@ -595,7 +514,7 @@ async function guardarBeneficiarioSupabase(beneficiario) {
                 csf: data.csf
             };
         } else {
-            const { data, error } = await supabaseClient
+            const { data, error } = await window.supabase
                 .from('beneficiarios')
                 .insert([{
                     nombre: beneficiario.nombre,
@@ -611,9 +530,6 @@ async function guardarBeneficiarioSupabase(beneficiario) {
                 .single();
             
             if (error) throw error;
-            
-            // Invalidar caché
-            ultimaActualizacion.beneficiarios = null;
             
             return {
                 id: data.id,
@@ -636,21 +552,20 @@ async function guardarBeneficiarioSupabase(beneficiario) {
 // ============================================
 // ELIMINAR BENEFICIARIO DE SUPABASE
 // ============================================
-async function eliminarBeneficiarioSupabase(id) {
-    if (!usarSupabase) {
-        guardarDatosLocalStorage();
+window.eliminarBeneficiarioSupabase = async function(id) {
+    if (!window.usarSupabase) {
+        window.guardarDatosLocalStorage();
         return;
     }
 
     try {
-        const { error } = await supabaseClient
+        const { error } = await window.supabase
             .from('beneficiarios')
             .delete()
             .eq('id', id);
         if (error) throw error;
         
-        // Invalidar caché
-        ultimaActualizacion.beneficiarios = null;
+        window.ultimaActualizacion.beneficiarios = null;
     } catch (error) {
         console.error('Error eliminando beneficiario:', error);
         throw error;
@@ -660,24 +575,43 @@ async function eliminarBeneficiarioSupabase(id) {
 // ============================================
 // SUBIR ARCHIVO A SUPABASE STORAGE
 // ============================================
-async function subirArchivoSupabase(file, carpeta) {
-    if (!usarSupabase) return null;
-
+window.subirArchivoSupabase = async function(file, carpeta = 'comprobantes') {
+    if (!window.usarSupabase) return null;
+    
+    const cliente = window.supabase;
+    
+    if (!cliente) {
+        console.error('❌ ERROR: window.supabase no está definido');
+        alert('Error: No se pudo conectar con Supabase Storage');
+        return null;
+    }
+    
     try {
-        const nombreArchivo = `${Date.now()}_${file.name}`;
-        const { data, error } = await supabaseClient.storage
-            .from('archivos-solicitudes')
-            .upload(`${carpeta}/${nombreArchivo}`, file);
+        const timestamp = Date.now();
+        const fileName = `${timestamp}_${file.name}`;
         
-        if (error) throw error;
-
-        const { data: urlData } = supabaseClient.storage
-            .from('archivos-solicitudes')
-            .getPublicUrl(`${carpeta}/${nombreArchivo}`);
+        const { data, error } = await cliente.storage
+            .from(carpeta)
+            .upload(fileName, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
+        
+        if (error) {
+            console.error('❌ Error subiendo archivo:', error);
+            alert(`Error al subir archivo: ${error.message}\n\n¿El bucket "${carpeta}" existe en Supabase Storage?`);
+            return null;
+        }
+        
+        const { data: urlData } = cliente.storage
+            .from(carpeta)
+            .getPublicUrl(fileName);
         
         return urlData.publicUrl;
+        
     } catch (error) {
-        console.error('Error subiendo archivo:', error);
+        console.error('❌ Error en subirArchivoSupabase:', error);
+        alert(`Error inesperado: ${error.message}`);
         return null;
     }
 }
@@ -685,7 +619,7 @@ async function subirArchivoSupabase(file, carpeta) {
 // ============================================
 // FUNCIÓN PARA MOSTRAR/OCULTAR INDICADOR DE CARGA
 // ============================================
-function mostrarCargando(mostrar) {
+window.mostrarCargando = function(mostrar) {
     let loader = document.getElementById('loader');
     if (!loader) {
         loader = document.createElement('div');
@@ -719,35 +653,33 @@ function mostrarCargando(mostrar) {
 // ============================================
 // GUARDAR EN LOCALSTORAGE (FALLBACK)
 // ============================================
-function guardarDatosLocalStorage() {
-    localStorage.setItem('solicitudes', JSON.stringify(solicitudes));
-    localStorage.setItem('contadores', JSON.stringify(contadores));
-    localStorage.setItem('beneficiarios', JSON.stringify(beneficiarios));
-    localStorage.setItem('empresas', JSON.stringify(empresas));
+window.guardarDatosLocalStorage = function() {
+    localStorage.setItem('solicitudes', JSON.stringify(window.solicitudes || []));
+    localStorage.setItem('contadores', JSON.stringify(window.contadores || {}));
+    localStorage.setItem('beneficiarios', JSON.stringify(window.beneficiarios || []));
+    localStorage.setItem('empresas', JSON.stringify(window.empresas || []));
 }
 
 // ============================================
 // ELIMINAR SOLICITUD DE SUPABASE (SOLO ADMIN)
 // ============================================
-async function eliminarSolicitudSupabase(id) {
-    if (!usarSupabase) {
-        const index = solicitudes.findIndex(s => s.id === id);
+window.eliminarSolicitudSupabase = async function(id) {
+    if (!window.usarSupabase) {
+        const index = window.solicitudes.findIndex(s => s.id === id);
         if (index > -1) {
-            solicitudes.splice(index, 1);
-            guardarDatosLocalStorage();
+            window.solicitudes.splice(index, 1);
+            window.guardarDatosLocalStorage();
         }
         return;
     }
 
     try {
-        const { error } = await supabaseClient
+        const { error } = await window.supabase
             .from('solicitudes')
             .delete()
             .eq('id', id);
         
         if (error) throw error;
-        
-        console.log('✓ Solicitud eliminada de Supabase');
         
     } catch (error) {
         console.error('Error eliminando solicitud:', error);

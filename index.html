@@ -9,6 +9,7 @@
     <script src="supabase-config.js"></script>
     <script src="supabase-functions.js"></script>
     <script src="organigrama.js"></script>
+    <script src="app.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -77,7 +78,6 @@
                             <th>Estado</th>
                             <th>Fecha</th>
                             <th>Archivos</th>
-                            <th>Pagada</th>
                             <th class="acciones-column">Acciones</th>
                         </tr>
                     </thead>
@@ -761,6 +761,20 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Modal de Flujo de Autorización -->
+    <div id="flujoAutorizacionModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <span class="close" onclick="cerrarModalFlujoAutorizacion()">&times;</span>
+            <h3>Flujo de Autorización</h3>
+            
+            <div id="flujoSolicitudInfo" style="background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #d01f34;">
+                <!-- Información de la solicitud -->
+            </div>
+            
+            <div id="flujoTimeline" class="flujo-autorizacion-container">
+                <!-- Timeline se generará dinámicamente -->
+            </div>
+        </div>
+    </div>
 </body>
 </html>

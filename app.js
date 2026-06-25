@@ -11,7 +11,25 @@ let usuarios = {
         empresaId: null,
         empresasIds: null
     },
-    
+    // AUXILIARES ADMINISTRATIVOS (nuevo rol)
+    'ags_auxiliar': { 
+        password: 'ags_aux2025', 
+        rol: 'auxiliar', 
+        sucursal: 'AGS', 
+        nombre: 'Auxiliar Aguascalientes',
+        gerencia: 'GCS',
+        empresaId: null,
+        empresasIds: null
+    },
+    'leo_auxiliar': { 
+        password: 'leo_aux2025', 
+        rol: 'auxiliar', 
+        sucursal: 'LEO', 
+        nombre: 'Auxiliar León',
+        gerencia: 'GCS',
+        empresaId: null,
+        empresasIds: null
+    },
     // JEFES DE SUCURSAL (requieren sucursal y gerencia)
     'ags_jefe': { 
         password: 'ags2025', 
@@ -194,6 +212,20 @@ let rolesConfig = {
         requiereEmpresas: false,
         editable: false
     },
+    'auxiliar': {
+        nombre: 'Auxiliar Administrativo',
+        permisos: [
+            'crear_solicitud',
+            'editar_solicitud',  // Solo sus propias solicitudes
+            'ver_solicitudes_sucursal'
+        ],
+        requiereSucursal: true,
+        requiereGerencia: true,  // Pertenece a GCS
+        requiereEmpresa: false,
+        requiereEmpresas: false,
+        nivelAutorizacion: 0.5,  // Menor que Jefe (1)
+        editable: true
+    },
     'jefe': {
         nombre: 'Jefe de Departamento',
         permisos: [
@@ -358,7 +390,7 @@ let rolesConfig = {
 console.log('✅ rolesConfig cargado correctamente:', rolesConfig);
 console.log('✅ Jefe requiere gerencia:', rolesConfig['jefe']?.requiereGerencia);
 
-let beneficiarios = [
+var beneficiarios = [
     {
         id: 1,
         nombre: 'ESPECTACULARES, S.A. DE C.V.',
@@ -375,7 +407,7 @@ let beneficiarios = [
 let editandoProveedor = null;
 let proveedorActualCSF = null;
 
-let empresas = [
+var empresas = [
     {
         id: 1,
         razonSocial: 'PUBLICIDAD EXTERIOR CONFIABLE, S.A. DE C.V.',
@@ -383,8 +415,8 @@ let empresas = [
     }
 ];
 
-let solicitudes = [];
-let contadores = { 
+var solicitudes = [];
+var contadores = {
     AGS: 0, 
     LEO: 0, 
     CAN: 0, 
@@ -415,10 +447,70 @@ let gastosTemporales = [];
 let archivosPDFGastos = {};
 let archivosXMLGastos = {};
 
+// ============================================
+// SISTEMA DE VERSIONADO
+// ============================================
+const APP_VERSION = '2.0.0';  // Sistema de autorizaciones por niveles
+const ROLES_CONFIG_VERSION = '2.0.0';
+
+// Verificar y actualizar configuración si cambió la versión
+function verificarVersionConfiguracion() {
+    const versionGuardada = localStorage.getItem('appVersion');
+    const rolesVersionGuardada = localStorage.getItem('rolesConfigVersion');
+    
+    // Si la versión cambió, limpiar configuraciones antiguas
+    if (versionGuardada !== APP_VERSION || rolesVersionGuardada !== ROLES_CONFIG_VERSION) {
+        console.log('🔄 Nueva versión detectada. Actualizando configuración...');
+        
+        // Limpiar configuraciones que pueden haber cambiado
+        localStorage.removeItem('rolesConfig');
+        
+        // Guardar nueva versión
+        localStorage.setItem('appVersion', APP_VERSION);
+        localStorage.setItem('rolesConfigVersion', ROLES_CONFIG_VERSION);
+        
+        // ✅ Opcional: Notificar al usuario
+        if (versionGuardada) {  // Solo si había una versión anterior
+            alert(`Sistema actualizado a versión ${APP_VERSION}\n\nSe han aplicado mejoras y correcciones.`);
+        }
+
+        console.log('✅ Configuración actualizada a versión', APP_VERSION);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async function() {
+    verificarVersionConfiguracion();
+    await window.supabaseListo;
     await cargarDatosDesdeSupabase();
+    await migrarSolicitudesAntiguasAlNuevoFlujo();
     verificarSesion();
     inicializarCamposMoneda();
+
+    const sucursalSelect = document.getElementById('sucursal');
+    if (sucursalSelect) {
+        sucursalSelect.addEventListener('change', function() {
+            const checkbox = document.getElementById('numeroAutomatico');
+            if (checkbox && checkbox.checked) {
+                toggleNumeroConsecutivo();
+            }
+            // Recargar solicitudes vinculadas al cambiar sucursal
+            cargarSolicitudesVinculadas();
+        });
+    }
+
+    const solicitudVinculadaSelect = document.getElementById('solicitudVinculada');
+    if (solicitudVinculadaSelect) {
+        solicitudVinculadaSelect.addEventListener('change', function() {
+            cargarConceptoVinculado();
+        });
+    }
+
+    const inputArchivos = document.getElementById('archivosNuevaSolicitud');
+    if (inputArchivos) {
+        inputArchivos.addEventListener('change', function() {
+            mostrarArchivosTemporales();
+        });
+    }
 });
 
 function verificarSesion() {
@@ -444,7 +536,10 @@ function iniciarSesion(event) {
             username: username,
             nombre: usuarios[username].nombre,
             rol: usuarios[username].rol,
-            sucursal: usuarios[username].sucursal
+            sucursal: usuarios[username].sucursal,
+            gerencia: usuarios[username].gerencia,
+            empresaId: usuarios[username].empresaId,
+            empresasIds: usuarios[username].empresasIds
         };
         
         sessionStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
@@ -500,8 +595,15 @@ function ocultarPestañasSegunPermisos() {
 function obtenerNombreRol(rol) {
     const roles = {
         'admin': 'Administrador General',
+        'auxiliar': 'Auxiliar Administrativo',  // ✅ NUEVO
+        'jefe': 'Jefe de Departamento',
         'coordinador': 'Coordinador de Departamentos',
-        'jefe': 'Jefe de Departamento'
+        'gerencia_sucursales': 'Gerencia de Sucursales',
+        'gerencia_centro': 'Gerencia de Centro',
+        'direccion_operaciones': 'Dirección de Operaciones',
+        'direccion_general': 'Dirección General',
+        'contabilidad': 'Contabilidad',
+        'tesoreria': 'Tesorería'
     };
     return roles[rol] || rol;
 }
@@ -509,7 +611,8 @@ function obtenerNombreRol(rol) {
 function configurarInterfazPorRol() {
     const sucursalSelect = document.getElementById('sucursal');
     
-    if (usuarioActual.rol === 'jefe' && usuarioActual.sucursal) {
+    // Auxiliar y Jefe tienen sucursal fija
+    if ((usuarioActual.rol === 'auxiliar' || usuarioActual.rol === 'jefe') && usuarioActual.sucursal) {
         sucursalSelect.value = usuarioActual.sucursal;
         sucursalSelect.disabled = true;
         sucursalSelect.style.background = '#f8f9fa';
@@ -776,28 +879,6 @@ function inicializarCamposMoneda() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    verificarSesion();
-    inicializarCamposMoneda();
-    
-    const sucursalSelect = document.getElementById('sucursal');
-    if (sucursalSelect) {
-        sucursalSelect.addEventListener('change', function() {
-            const checkbox = document.getElementById('numeroAutomatico');
-            if (checkbox && checkbox.checked) {
-                toggleNumeroConsecutivo();
-            }
-        });
-    }
-    
-    const solicitudVinculadaSelect = document.getElementById('solicitudVinculada');
-    if (solicitudVinculadaSelect) {
-        solicitudVinculadaSelect.addEventListener('change', function() {
-            cargarConceptoVinculado();
-        });
-    }
-});
-
 function cargarEmpresasSelect() {
     const select = document.getElementById('empresa');
     if (!select) return;
@@ -892,30 +973,6 @@ function toggleNumeroConsecutivo() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    verificarSesion();
-    inicializarCamposMoneda();
-    
-    const sucursalSelect = document.getElementById('sucursal');
-    if (sucursalSelect) {
-        sucursalSelect.addEventListener('change', function() {
-            const checkbox = document.getElementById('numeroAutomatico');
-            if (checkbox && checkbox.checked) {
-                toggleNumeroConsecutivo();
-            }
-            // Recargar solicitudes vinculadas al cambiar sucursal
-            cargarSolicitudesVinculadas();
-        });
-    }
-    
-    const solicitudVinculadaSelect = document.getElementById('solicitudVinculada');
-    if (solicitudVinculadaSelect) {
-        solicitudVinculadaSelect.addEventListener('change', function() {
-            cargarConceptoVinculado();
-        });
-    }
-});
-
 function cargarBeneficiariosSelect() {
     const select = document.getElementById('beneficiario');
     if (!select) return;
@@ -972,16 +1029,6 @@ function generarNumeroConsecutivo(sucursal, numeroIngresado) {
     const numeroFormateado = numeroIngresado.toString().padStart(3, '0');
     return `${sucursal}-${numeroFormateado}-${año}`;
 }
-
-// Manejar selección de archivos en nueva solicitud
-document.addEventListener('DOMContentLoaded', function() {
-    const inputArchivos = document.getElementById('archivosNuevaSolicitud');
-    if (inputArchivos) {
-        inputArchivos.addEventListener('change', function() {
-            mostrarArchivosTemporales();
-        });
-    }
-});
 
 function mostrarArchivosTemporales() {
     const input = document.getElementById('archivosNuevaSolicitud');
@@ -1556,7 +1603,23 @@ function validarGastosCajaChica() {
             errores.push(`Fila ${numeroFila}: El monto debe ser mayor a $0.00`);
             continue;
         }
-        
+
+        // Validar antigüedad de la factura (máximo 35 días)
+        const fechaFactura = new Date(fecha + 'T00:00:00');
+        if (isNaN(fechaFactura.getTime())) {
+            errores.push(`Fila ${numeroFila}: La fecha de la factura no es válida`);
+            continue;
+        }
+        const diasAntiguedad = Math.floor((new Date() - fechaFactura) / (1000 * 60 * 60 * 24));
+        if (diasAntiguedad > 35) {
+            errores.push(`Fila ${numeroFila}: La factura tiene ${diasAntiguedad} días de antigüedad (máximo permitido: 35 días)`);
+            continue;
+        }
+        if (diasAntiguedad < 0) {
+            errores.push(`Fila ${numeroFila}: La fecha de la factura no puede ser futura`);
+            continue;
+        }
+
         // Validar archivo PDF obligatorio
         if (!archivosPDFGastos[idFila]) {
             errores.push(`Fila ${numeroFila}: Debe adjuntar el comprobante PDF/Imagen`);
@@ -1875,9 +1938,15 @@ async function crearSolicitud(event) {
         // Modo creación
         const numeroAutomatico = document.getElementById('numeroAutomatico').checked;
         let numeroConsecutivo;
-        
+
         if (numeroAutomatico) {
-            numeroConsecutivo = contadores[sucursal] + 1;
+            if (window.usarSupabase) {
+                // Incremento atómico en la base de datos: evita folios duplicados
+                // si dos usuarios crean una solicitud al mismo tiempo.
+                numeroConsecutivo = await window.obtenerSiguienteConsecutivoSupabase(sucursal);
+            } else {
+                numeroConsecutivo = contadores[sucursal] + 1;
+            }
         } else {
             numeroConsecutivo = parseInt(document.getElementById('numeroConsecutivo').value);
             if (!numeroConsecutivo || numeroConsecutivo < 1) {
@@ -1891,6 +1960,36 @@ async function crearSolicitud(event) {
         
         let solicitud;
         
+        // Determinar qué gerencia debe autorizar
+        const gerenciaTipo = ['AGS', 'LEO', 'CAN', 'MTY', 'GDL', 'VSA', 'COS'].includes(sucursal) ? 'GCS' : 'GCC';
+
+        // Verificar si la empresa es DESPACHO S/C (no requiere Contabilidad)
+        const empresaObj = empresas.find(e => e.id === parseInt(empresaId));
+        // ✅ Verificar si la empresa es DESPACHO S/C (no requiere Contabilidad)
+        const esDespacho = empresaObj && (
+            empresaObj.razonSocial.toUpperCase().includes('DESPACHO') ||
+            empresaObj.razonSocial.toUpperCase().includes('DESPACHO S/C') ||
+            empresaObj.rfc.toUpperCase().includes('DESPACHO')
+        );
+
+        // ✅ DEBUG
+        console.log('📋 CREANDO SOLICITUD');
+        console.log('Empresa ID:', empresaId);
+        console.log('Empresa objeto:', empresaObj);
+        console.log('Razón Social:', empresaObj?.razonSocial);
+        console.log('¿Es DESPACHO?:', esDespacho);
+
+        // Determinar si requiere autorización de Jefe (si fue creado por Auxiliar)
+        const requiereJefe = usuarioActual.rol === 'auxiliar';
+
+        if (requiereJefe) {
+            const hayJefeAsignado = Object.values(usuarios).some(u => u.rol === 'jefe' && u.sucursal === sucursal);
+            if (!hayJefeAsignado) {
+                alert(`No hay un Jefe de Sucursal asignado para "${sucursal}". La solicitud quedaría sin poder avanzar. Pide al administrador que asigne un Jefe de Sucursal antes de crearla.`);
+                return;
+            }
+        }
+
         if (tipoFormato === 'cajaChica') {
             // Solicitud de Reembolso de Caja Chica
             const beneficiarioCajaChicaId = document.getElementById('beneficiarioCajaChica').value;
@@ -1898,8 +1997,6 @@ async function crearSolicitud(event) {
             const totalReembolsar = gastos
                 .filter(g => g.autorizado)
                 .reduce((sum, g) => sum + g.monto, 0);
-            
-            const beneficiario = beneficiarios.find(b => b.id == beneficiarioCajaChicaId);
             
             solicitud = {
                 id: Date.now(),
@@ -1922,14 +2019,54 @@ async function crearSolicitud(event) {
                 cuenta: document.getElementById('cuentaCajaChica').value,
                 clabe: document.getElementById('clabeCajaChica').value,
                 ciudad: '',
-                estado: 'pendiente',
+                estado: requiereJefe ? 'pendiente_jefe' : 'pendiente_gerencia',
                 fechaSolicitud: new Date().toISOString(),
                 fechaAutorizacion: null,
                 solicitudesVinculadas: [],
                 archivos: archivosAdjuntos,
                 creadoPor: usuarioActual.username,
                 tipoFormato: 'cajaChica',
-                gastosCajaChica: gastos
+                gastosCajaChica: gastos,
+                // ✅ NUEVO: Flujo de autorización
+                flujoAutorizacion: {
+                    jefe_sucursal: {
+                        requerido: requiereJefe,
+                        autorizado: false,
+                        fecha: null,
+                        usuario: null
+                    },
+                    gerencia: {
+                        tipo: gerenciaTipo,
+                        requerido: true,
+                        autorizado: false,
+                        fecha: null,
+                        usuario: null
+                    },
+                    direccion_operaciones: {
+                        requerido: true,
+                        autorizado: false,
+                        fecha: null,
+                        usuario: null
+                    },
+                    contabilidad: {
+                        requerido: !esDespacho,
+                        revisado: false,
+                        fecha: null,
+                        usuario: null
+                    },
+                    direccion_general: {
+                        requerido: true,
+                        autorizado: false,
+                        fecha: null,
+                        usuario: null
+                    },
+                    tesoreria: {
+                        requerido: true,
+                        pagado: false,
+                        fecha: null,
+                        usuario: null
+                    }
+                }
             };
         } else {
             // Solicitud Normal
@@ -1963,14 +2100,54 @@ async function crearSolicitud(event) {
                 cuenta: document.getElementById('cuenta').value,
                 clabe: document.getElementById('clabe').value,
                 ciudad: '',
-                estado: 'pendiente',
+                estado: requiereJefe ? 'pendiente_jefe' : 'pendiente_gerencia',
                 fechaSolicitud: new Date().toISOString(),
                 fechaAutorizacion: null,
                 solicitudesVinculadas: solicitudesVinculadas,
                 archivos: archivosAdjuntos,
                 creadoPor: usuarioActual.username,
                 tipoFormato: 'normal',
-                gastosCajaChica: null
+                gastosCajaChica: null,
+                // ✅ NUEVO: Flujo de autorización
+                flujoAutorizacion: {
+                    jefe_sucursal: {
+                        requerido: requiereJefe,
+                        autorizado: false,
+                        fecha: null,
+                        usuario: null
+                    },
+                    gerencia: {
+                        tipo: gerenciaTipo,
+                        requerido: true,
+                        autorizado: false,
+                        fecha: null,
+                        usuario: null
+                    },
+                    direccion_operaciones: {
+                        requerido: true,
+                        autorizado: false,
+                        fecha: null,
+                        usuario: null
+                    },
+                    contabilidad: {
+                        requerido: !esDespacho,
+                        revisado: false,
+                        fecha: null,
+                        usuario: null
+                    },
+                    direccion_general: {
+                        requerido: true,
+                        autorizado: false,
+                        fecha: null,
+                        usuario: null
+                    },
+                    tesoreria: {
+                        requerido: true,
+                        pagado: false,
+                        fecha: null,
+                        usuario: null
+                    }
+                }
             };
         }
         
@@ -2093,6 +2270,19 @@ function limpiarFormulario() {
     console.log('========================');
 }
 
+async function refrescarTodosDatos() {
+    mostrarCargando(true);
+    try {
+        await cargarSolicitudesSupabase();
+        cargarSolicitudes();
+    } catch (error) {
+        console.error('Error al refrescar solicitudes:', error);
+        alert('Error al refrescar los datos');
+    } finally {
+        mostrarCargando(false);
+    }
+}
+
 function cargarSolicitudes() {
     const tbody = document.querySelector('#solicitudesTable tbody');
     tbody.innerHTML = '';
@@ -2111,9 +2301,14 @@ function cargarSolicitudes() {
     // Ordenar por fecha descendente (más reciente primero)
     solicitudesFiltradas.sort((a, b) => new Date(b.fechaSolicitud) - new Date(a.fechaSolicitud));
     
-    // Separar por estado
-    const pendientes = solicitudesFiltradas.filter(s => s.estado === 'pendiente');
-    const finalizadas = solicitudesFiltradas.filter(s => s.estado === 'autorizada' || s.estado === 'cancelada');
+    // ✅ Separar por estado con nueva lógica
+    const pendientes = solicitudesFiltradas.filter(s => {
+        return s.estado !== 'cancelada' && s.estado !== 'pagada' && s.estado !== 'rechazada';
+    });
+
+    const finalizadas = solicitudesFiltradas.filter(s => {
+        return s.estado === 'cancelada' || s.estado === 'pagada' || s.estado === 'rechazada';
+    });
     
     // Función para crear fila
     const crearFila = (solicitud) => {
@@ -2123,8 +2318,27 @@ function cargarSolicitudes() {
         const tieneComprobante = solicitud.comprobantePago ? true : false;
         const iconoComprobante = tieneComprobante ? '📄' : '';
         
-        const puedeEditar = tienePermiso('editar_solicitud') && solicitud.estado === 'pendiente';
-        const puedeAutorizar = tienePermiso('autorizar_solicitud') && solicitud.estado === 'pendiente';
+        // ✅ Actualizar estado basado en flujo (o mantener el antiguo si no tiene flujo)
+        if (solicitud.flujoAutorizacion) {
+            const nuevoEstado = determinarEstadoSolicitud(solicitud);
+            if (nuevoEstado !== solicitud.estado) {
+                solicitud.estado = nuevoEstado;
+            }
+        } else {
+            // Solicitud antigua sin flujo - mapear estados antiguos a nuevos
+            if (solicitud.estado === 'pendiente') {
+                solicitud.estado = 'nueva';
+            } else if (solicitud.estado === 'autorizada') {
+                solicitud.estado = 'pendiente_tesoreria'; // Autorizada pero sin pagar
+            }
+            // 'pagada' y 'cancelada' se mantienen igual
+        }
+
+        const puedeEditar = tienePermiso('editar_solicitud') &&
+                            (solicitud.estado === 'nueva' || solicitud.estado.startsWith('pendiente_')) &&
+                            (usuarioActual.rol === 'admin' || solicitud.creadoPor === usuarioActual.username);
+
+        const accionAutorizacion = puedeActuarEnSolicitud(solicitud);
         const puedeCancelar = tienePermiso('cancelar_solicitud');
         const puedeDescargarArchivos = tienePermiso('descargar_archivos');
         const puedeEliminar = usuarioActual && usuarioActual.rol === 'admin'; // ✅ NUEVO
@@ -2144,25 +2358,30 @@ function cargarSolicitudes() {
                             style="padding: 5px; font-size: 16px; background: #d0d0d0; color: #808080; cursor: not-allowed; opacity: 0.6;" title="No editable">
                         ✎
                     </button>`}
-                ${puedeAutorizar ? 
-                    `<button class="btn" onclick="autorizarSolicitud(${solicitud.id})" 
-                            style="padding: 5px; font-size: 16px; background: #5a8a5a; color: white;" title="Autorizar">
-                        ✓
+                ${accionAutorizacion.puede ? 
+                    `<button class="btn" onclick="ejecutarAccionAutorizacion(${solicitud.id})" 
+                            style="padding: 5px; font-size: 16px; background: #5a8a5a; color: white;" title="${accionAutorizacion.tooltip}">
+                        ${accionAutorizacion.texto}
                     </button>` : 
                     `<button class="btn" disabled 
-                            style="padding: 5px; font-size: 16px; background: #d0d0d0; color: #808080; cursor: not-allowed; opacity: 0.6;" title="No autorizable">
-                        ✓
+                            style="padding: 5px; font-size: 16px; background: #d0d0d0; color: #808080; cursor: not-allowed; opacity: 0.6;" title="${accionAutorizacion.razon || 'No autorizable'}">
+                        ${accionAutorizacion.texto || '✓'}
                     </button>`}
                 ${puedeCancelar ?
-                    `<button class="btn" onclick="cancelarSolicitud(${solicitud.id})" 
+                    `<button class="btn" onclick="cancelarSolicitud(${solicitud.id})"
                             style="padding: 5px; font-size: 16px; background: #a05050; color: white;" title="Cancelar">
                         ✕
                     </button>` :
-                    `<button class="btn" disabled 
+                    `<button class="btn" disabled
                             style="padding: 5px; font-size: 16px; background: #d0d0d0; color: #808080; cursor: not-allowed; opacity: 0.6;" title="No puede cancelar">
                         ✕
                     </button>`}
-                ${puedeEliminar ? 
+                ${accionAutorizacion.puede ?
+                    `<button class="btn" onclick="rechazarSolicitud(${solicitud.id})"
+                            style="padding: 5px; font-size: 16px; background: #b22222; color: white; grid-column: 1 / -1;" title="Rechazar">
+                        ⛔ RECHAZAR
+                    </button>` : ''}
+                ${puedeEliminar ?
                     `<button class="btn" onclick="eliminarSolicitud(${solicitud.id})" 
                             style="padding: 5px; font-size: 16px; background: #8b0000; color: white; grid-column: 1 / -1;" title="Eliminar permanentemente (ADMIN)">
                         🗑 ELIMINAR
@@ -2210,10 +2429,18 @@ function cargarSolicitudes() {
             });
         }
 
-        // Crear columna de archivos
+        // ✅ Nueva columna de archivos (incluyendo comprobante)
         let columnaArchivos = '';
 
         if (puedeDescargarArchivos) {
+            const tieneComprobante = solicitud.comprobantePago ? true : false;
+            const btnComprobanteHTML = tienePermiso('gestionar_comprobantes') && solicitud.estado !== 'cancelada'
+                ? `<button class="btn" onclick="gestionarComprobantePago(${solicitud.id})" 
+                        style="padding: 4px 10px; font-size: 10px; background: ${tieneComprobante ? '#28a745' : '#17a2b8'}; color: white; white-space: nowrap; margin-top: 4px;">
+                    ${tieneComprobante ? '✓ Comprobante' : '↑ Comprobante de pago'}
+                </button>`
+                : '';
+            
             columnaArchivos = `
                 <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
                     <span style="font-size: 11px; font-weight: 600; color: #495057;">${totalArchivos} archivo(s)</span>
@@ -2231,6 +2458,8 @@ function cargarSolicitudes() {
                             ↑ PDF y XML
                         </button>
                     ` : ''}
+                    
+                    ${btnComprobanteHTML}
                 </div>
             `;
         } else {
@@ -2260,10 +2489,23 @@ function cargarSolicitudes() {
                 </div>
             </td>
             <td style="white-space: nowrap;">$${solicitud.total.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
-            <td><span class="status ${solicitud.estado}">${solicitud.estado.toUpperCase()}</span></td>
+            <td>
+                <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
+                    <span class="status ${solicitud.estado}" 
+                        onclick="mostrarFlujoAutorizacion(${solicitud.id})" 
+                        style="cursor: pointer; transition: all 0.2s; position: relative;"
+                        onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.2)';"
+                        onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none';"
+                        title="${solicitud.estado === 'cancelada' ? 'Solicitud cancelada' :
+                                solicitud.estado === 'rechazada' ? `Rechazada: ${solicitud.rechazo?.motivo || 'Sin motivo registrado'}` :
+                                solicitud.estado === 'pagada' ? 'Finalizada: Pagada con comprobante' :
+                                'Ver flujo de autorización'}">
+                        ${obtenerTextoEstado(solicitud.estado)}
+                    </span>
+                </div>
+            </td>
             <td style="white-space: nowrap;">${formatearFecha(solicitud.fechaSolicitud)}</td>
             <td style="text-align: center;">${columnaArchivos}</td>
-            <td>${columnaPagada}</td>
             <td class="acciones-column">${botonesAccion}</td>
         `;
     };
@@ -3257,21 +3499,6 @@ function imprimirSolicitud() {
 
 function cerrarModal() {
     document.getElementById('detalleModal').style.display = 'none';
-}
-
-async function autorizarSolicitud(id) {
-    const solicitud = solicitudes.find(s => s.id === id);
-    if (solicitud && solicitud.estado === 'pendiente') {
-        if (confirm('¿Está seguro de autorizar esta solicitud?')) {
-            solicitud.estado = 'autorizada';
-            solicitud.fechaAutorizacion = new Date().toISOString();
-            
-            await actualizarSolicitudSupabase(solicitud);
-            await cargarSolicitudesSupabase(); // Recargar solicitudes
-            cargarSolicitudes();
-            alert('Solicitud autorizada exitosamente');
-        }
-    }
 }
 
 async function cancelarSolicitud(id) {
@@ -4641,60 +4868,6 @@ async function guardarDatos() {
     guardarDatosLocalStorage();
 }
 
-function cargarDatos() {
-    const solicitudesGuardadas = localStorage.getItem('solicitudes');
-    if (solicitudesGuardadas) {
-        try {
-            solicitudes = JSON.parse(solicitudesGuardadas);
-        } catch (e) {
-            console.error('Error al cargar solicitudes:', e);
-        }
-    }
-    
-    const contadoresGuardados = localStorage.getItem('contadores');
-    if (contadoresGuardados) {
-        try {
-            contadores = JSON.parse(contadoresGuardados);
-        } catch (e) {
-            console.error('Error al cargar contadores:', e);
-        }
-    }
-    
-    const beneficiariosGuardados = localStorage.getItem('beneficiarios');
-    if (beneficiariosGuardados) {
-        try {
-            const beneficiariosTemp = JSON.parse(beneficiariosGuardados);
-            // Asegurar que todos tengan la propiedad tipo
-            beneficiarios = beneficiariosTemp.map(b => ({
-                ...b,
-                tipo: b.tipo || 'proveedor' // <-- LÍNEA CRÍTICA
-            }));
-            //console.log('Beneficiarios cargados desde localStorage:', beneficiarios);
-        } catch (e) {
-            //console.error('Error al cargar beneficiarios:', e);
-        }
-    }
-    
-    const empresasGuardadas = localStorage.getItem('empresas');
-    if (empresasGuardadas) {
-        try {
-            empresas = JSON.parse(empresasGuardadas);
-        } catch (e) {
-            console.error('Error al cargar empresas:', e);
-        }
-    }
-    
-    cargarUsuariosDesdeStorage();
-}
-
-//cargarDatos();
-
-//window.addEventListener('beforeunload', function() {
-//    guardarDatos();
-//});
-
-//setInterval(guardarDatos, 30000);
-
 async function marcarComoPagada(solicitudId, estaPagada) {
     const solicitud = solicitudes.find(s => s.id === solicitudId);
     if (solicitud) {
@@ -4814,16 +4987,37 @@ async function subirComprobantePago() {
                 fecha: new Date().toISOString()
             };
             
+            // ✅ Actualizar flujo de autorización
+            if (solicitud.flujoAutorizacion) {
+                solicitud.flujoAutorizacion.tesoreria.pagado = true;
+                solicitud.flujoAutorizacion.tesoreria.fecha = new Date().toISOString();
+                solicitud.flujoAutorizacion.tesoreria.usuario = usuarioActual.username;
+            }
+            
+            // ✅ Cambiar estado a "pagada"
+            solicitud.estado = 'pagada';
+            solicitud.pagada = true;
+            solicitud.fechaPago = new Date().toISOString();
+            
             await actualizarSolicitudSupabase(solicitud);
-            await cargarDatosDesdeSupabase();
-            alert('Comprobante de pago subido exitosamente');
-            gestionarComprobantePago(solicitudId);
+            
+            // Actualizar array local
+            const index = solicitudes.findIndex(s => s.id === solicitudId);
+            if (index !== -1) {
+                solicitudes[index] = { ...solicitud };
+            }
+            
+            mostrarCargando(false);
+            alert('Comprobante de pago subido exitosamente. Estado cambiado a PAGADA.');
+            cerrarModalComprobante();
             cargarSolicitudes();
             input.value = '';
         } else {
-            alert('Error al subir el archivo');
+            mostrarCargando(false);
+            alert('Error al subir el archivo. Verifica que el bucket "comprobantes" exista en Supabase Storage.');
         }
     } else {
+        // Modo localStorage
         const reader = new FileReader();
         reader.onload = function(e) {
             solicitud.comprobantePago = {
@@ -4833,16 +5027,27 @@ async function subirComprobantePago() {
                 fecha: new Date().toISOString()
             };
             
+            // ✅ Actualizar flujo de autorización
+            if (solicitud.flujoAutorizacion) {
+                solicitud.flujoAutorizacion.tesoreria.pagado = true;
+                solicitud.flujoAutorizacion.tesoreria.fecha = new Date().toISOString();
+                solicitud.flujoAutorizacion.tesoreria.usuario = usuarioActual.username;
+            }
+            
+            // ✅ Cambiar estado a "pagada"
+            solicitud.estado = 'pagada';
+            solicitud.pagada = true;
+            solicitud.fechaPago = new Date().toISOString();
+            
             guardarDatosLocalStorage();
-            alert('Comprobante de pago subido exitosamente');
-            gestionarComprobantePago(solicitudId);
-                        cargarSolicitudes();
+            mostrarCargando(false);
+            alert('Comprobante de pago subido exitosamente. Estado cambiado a PAGADA.');
+            cerrarModalComprobante();
+            cargarSolicitudes();
             input.value = '';
         };
         reader.readAsDataURL(file);
     }
-    
-    mostrarCargando(false);
 }
 
 function descargarComprobantePago(solicitudId) {
@@ -4888,15 +5093,47 @@ function tienePermiso(permiso) {
 // Cargar configuración de roles desde localStorage
 function cargarRolesConfig() {
     const rolesGuardados = localStorage.getItem('rolesConfig');
-    if (rolesGuardados) {
-        try {
-            const rolesTemp = JSON.parse(rolesGuardados);
-            // Siempre mantener el rol admin con permisos completos
-            rolesTemp['admin'] = rolesConfig['admin'];
-            rolesConfig = rolesTemp;
-        } catch (e) {
-            console.error('Error al cargar roles:', e);
-        }
+    
+    // Si no hay nada guardado, usar la configuración por defecto
+    if (!rolesGuardados) {
+        guardarRolesConfig();
+        return;
+    }
+    
+    try {
+        const rolesTemp = JSON.parse(rolesGuardados);
+        
+        // Siempre mantener el rol admin actualizado
+        rolesTemp['admin'] = rolesConfig['admin'];
+        
+        // Actualizar roles existentes con nuevas propiedades del código
+        Object.keys(rolesConfig).forEach(codigoRol => {
+            if (!rolesTemp[codigoRol]) {
+                // Si es un rol nuevo, agregarlo
+                rolesTemp[codigoRol] = rolesConfig[codigoRol];
+            } else {
+                // Si existe, hacer merge manteniendo datos del código como base
+                rolesTemp[codigoRol] = {
+                    ...rolesConfig[codigoRol],      // Base del código (con nuevas propiedades)
+                    ...rolesTemp[codigoRol],        // Datos guardados
+                    // Asegurar propiedades críticas del código
+                    requiereSucursal: rolesConfig[codigoRol].requiereSucursal ?? rolesTemp[codigoRol].requiereSucursal ?? false,
+                    requiereGerencia: rolesConfig[codigoRol].requiereGerencia ?? rolesTemp[codigoRol].requiereGerencia ?? false,
+                    requiereEmpresa: rolesConfig[codigoRol].requiereEmpresa ?? rolesTemp[codigoRol].requiereEmpresa ?? false,
+                    requiereEmpresas: rolesConfig[codigoRol].requiereEmpresas ?? rolesTemp[codigoRol].requiereEmpresas ?? false,
+                    editable: rolesConfig[codigoRol].editable ?? rolesTemp[codigoRol].editable ?? true
+                };
+            }
+        });
+        
+        rolesConfig = rolesTemp;
+        
+        // Guardar la versión actualizada
+        guardarRolesConfig();
+    } catch (e) {
+        console.error('Error al cargar roles:', e);
+        // Si hay error, usar configuración por defecto
+        guardarRolesConfig();
     }
 }
 
@@ -5251,4 +5488,646 @@ async function eliminarSolicitud(id) {
         console.error('Error al eliminar solicitud:', error);
         alert('Error al eliminar la solicitud: ' + error.message);
     }
+}
+
+// ============================================
+// FLUJO DE AUTORIZACIÓN
+// ============================================
+
+function mostrarFlujoAutorizacion(solicitudId) {
+    const solicitud = solicitudes.find(s => s.id === solicitudId);
+    const empresa = empresas.find(e => e.id === solicitud.empresaId);
+    
+    if (!solicitud) return;
+    
+// ✅ DEBUG: Ver información de la empresa
+    //const empresa = empresas.find(e => e.id === solicitud.empresaId);
+    console.log('========================================');
+    console.log('DEBUG FLUJO DE AUTORIZACIÓN');
+    console.log('========================================');
+    console.log('Solicitud:', solicitud.numero);
+    console.log('Empresa ID:', solicitud.empresaId);
+    console.log('Empresa objeto:', empresa);
+    console.log('Razón Social:', empresa?.razonSocial);
+    console.log('Es Despacho?:', esEmpresaDespacho(solicitud.empresaId));
+    console.log('Flujo Contabilidad:', solicitud.flujoAutorizacion?.contabilidad);
+    console.log('========================================');
+
+    const modal = document.getElementById('flujoAutorizacionModal');
+    const info = document.getElementById('flujoSolicitudInfo');
+    const timeline = document.getElementById('flujoTimeline');
+       
+    // ✅ Determinar etiqueta según tipo de solicitud
+    const etiquetaBeneficiario = solicitud.tipoFormato === 'cajaChica' ? 'Solicitante' : 'Proveedor';
+    
+    // Información de la solicitud
+    info.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <div>
+                <strong style="color: #d01f34;">Número:</strong><br>
+                <span style="font-size: 18px; font-weight: 600;">${solicitud.numero}</span>
+            </div>
+            <div>
+                <strong style="color: #d01f34;">Empresa:</strong><br>
+                ${empresa ? empresa.razonSocial : 'N/A'}
+            </div>
+            <div>
+                <strong style="color: #d01f34;">${etiquetaBeneficiario}:</strong><br>
+                ${solicitud.proveedor}
+            </div>
+            <div>
+                <strong style="color: #d01f34;">Total:</strong><br>
+                <span style="font-size: 18px; font-weight: 600; color: #28a745;">$${solicitud.total.toLocaleString('es-MX', {minimumFractionDigits: 2})}</span>
+            </div>
+            <div>
+                <strong style="color: #d01f34;">Estado Actual:</strong><br>
+                <span class="status ${solicitud.estado}" style="font-size: 13px;">${obtenerTextoEstado(solicitud.estado)}</span>
+            </div>
+        </div>
+    `;
+    
+    // Obtener flujo de autorización desde el organigrama
+    const flujo = organigramaEmpresa.obtenerFlujoAutorizacion(solicitud.sucursal, solicitud.empresaId);
+    const flujoAuth = solicitud.flujoAutorizacion;
+
+    // ✅ Verificar si Contabilidad está en el flujo
+    const empresaObj = empresas.find(e => e.id === solicitud.empresaId);
+    const esDespacho = empresaObj && (
+        empresaObj.razonSocial.toUpperCase().includes('DESPACHO') ||
+        empresaObj.razonSocial.toUpperCase().includes('DESPACHO S/C')
+    );
+
+    console.log('🔍 Empresa:', empresaObj?.razonSocial);
+    console.log('🔍 Es Despacho:', esDespacho);
+    console.log('🔍 Flujo Contabilidad requerido:', flujoAuth?.contabilidad?.requerido);
+    
+    // Generar timeline
+    let timelineHTML = '<div class="timeline">';
+    
+    flujo.forEach((nivel, index) => {
+        let estadoNivel = 'pendiente';
+        let iconoCheckpoint = '○';
+        let fechaHTML = '';
+        let usuarioHTML = '';
+        
+        if (index === 0) {
+            // ✅ Nivel de solicitud (siempre completado)
+            estadoNivel = 'completado';
+            iconoCheckpoint = '✓';
+            fechaHTML = `<div class="timeline-fecha">Solicitado: ${formatearFecha(solicitud.fechaSolicitud)}</div>`;
+            usuarioHTML = `<div class="timeline-usuario">Por: ${solicitud.creadoPor || 'Sistema'}</div>`;
+            
+        } else if (solicitud.estado === 'cancelada') {
+            // ✅ Solicitud cancelada - todos los niveles posteriores rechazados
+            estadoNivel = 'rechazado';
+            iconoCheckpoint = '✕';
+            
+        } else {
+            // ✅ Verificar estado según el código del nivel
+            
+            // JEFE DE SUCURSAL (si existe en el flujo y es requerido)
+            if (nivel.codigo === solicitud.sucursal && index > 0 && flujoAuth?.jefe_sucursal?.requerido) {
+                if (flujoAuth.jefe_sucursal.autorizado) {
+                    estadoNivel = 'completado';
+                    iconoCheckpoint = '✓';
+                    if (flujoAuth.jefe_sucursal.fecha) {
+                        fechaHTML = `<div class="timeline-fecha">Autorizado: ${formatearFecha(flujoAuth.jefe_sucursal.fecha)}</div>`;
+                    }
+                    if (flujoAuth.jefe_sucursal.usuario) {
+                        usuarioHTML = `<div class="timeline-usuario">Por: ${flujoAuth.jefe_sucursal.usuario}</div>`;
+                    }
+                } else if (solicitud.estado === 'pendiente_jefe') {
+                    estadoNivel = 'actual';
+                    iconoCheckpoint = '⏳';
+                }
+            }
+            
+            // GERENCIA (GCS o GCC)
+            else if (nivel.codigo === 'GCS' || nivel.codigo === 'GCC') {
+                if (flujoAuth?.gerencia?.autorizado) {
+                    estadoNivel = 'completado';
+                    iconoCheckpoint = '✓';
+                    if (flujoAuth.gerencia.fecha) {
+                        fechaHTML = `<div class="timeline-fecha">Autorizado: ${formatearFecha(flujoAuth.gerencia.fecha)}</div>`;
+                    }
+                    if (flujoAuth.gerencia.usuario) {
+                        usuarioHTML = `<div class="timeline-usuario">Por: ${flujoAuth.gerencia.usuario}</div>`;
+                    }
+                } else if (solicitud.estado === 'pendiente_gerencia') {
+                    estadoNivel = 'actual';
+                    iconoCheckpoint = '⏳';
+                }
+            }
+            
+            // DIRECCIÓN DE OPERACIONES
+            else if (nivel.codigo === 'DOP') {
+                if (flujoAuth?.direccion_operaciones?.autorizado) {
+                    estadoNivel = 'completado';
+                    iconoCheckpoint = '✓';
+                    if (flujoAuth.direccion_operaciones.fecha) {
+                        fechaHTML = `<div class="timeline-fecha">Autorizado: ${formatearFecha(flujoAuth.direccion_operaciones.fecha)}</div>`;
+                    }
+                    if (flujoAuth.direccion_operaciones.usuario) {
+                        usuarioHTML = `<div class="timeline-usuario">Por: ${flujoAuth.direccion_operaciones.usuario}</div>`;
+                    }
+                } else if (solicitud.estado === 'pendiente_dir_operaciones') {
+                    estadoNivel = 'actual';
+                    iconoCheckpoint = '⏳';
+                }
+            }
+            
+            // CONTABILIDAD
+            else if (nivel.codigo === 'CONT') {
+                if (!flujoAuth?.contabilidad?.requerido) {
+                    // No requerido para esta solicitud (DESPACHO S/C)
+                    estadoNivel = 'pendiente';
+                    iconoCheckpoint = '⊘';
+                    fechaHTML = `<div class="timeline-fecha" style="color: #999; font-style: italic;">No requerido (DESPACHO S/C)</div>`;
+                } else if (flujoAuth.contabilidad.revisado) {
+                    estadoNivel = 'completado';
+                    iconoCheckpoint = '✓';
+                    if (flujoAuth.contabilidad.fecha) {
+                        fechaHTML = `<div class="timeline-fecha">Revisado: ${formatearFecha(flujoAuth.contabilidad.fecha)}</div>`;
+                    }
+                    if (flujoAuth.contabilidad.usuario) {
+                        usuarioHTML = `<div class="timeline-usuario">Por: ${flujoAuth.contabilidad.usuario}</div>`;
+                    }
+                } else if (solicitud.estado === 'pendiente_contabilidad') {
+                    estadoNivel = 'actual';
+                    iconoCheckpoint = '⏳';
+                }
+            }
+            
+            // DIRECCIÓN GENERAL
+            else if (nivel.codigo === 'DIR') {
+                if (flujoAuth?.direccion_general?.autorizado) {
+                    estadoNivel = 'completado';
+                    iconoCheckpoint = '✓';
+                    if (flujoAuth.direccion_general.fecha) {
+                        fechaHTML = `<div class="timeline-fecha">Autorizado: ${formatearFecha(flujoAuth.direccion_general.fecha)}</div>`;
+                    }
+                    if (flujoAuth.direccion_general.usuario) {
+                        usuarioHTML = `<div class="timeline-usuario">Por: ${flujoAuth.direccion_general.usuario}</div>`;
+                    }
+                } else if (solicitud.estado === 'pendiente_dir_general') {
+                    estadoNivel = 'actual';
+                    iconoCheckpoint = '⏳';
+                }
+            }
+            
+            // TESORERÍA
+            else if (nivel.codigo === 'TES') {
+                if (flujoAuth?.tesoreria?.pagado || solicitud.estado === 'pagada') {
+                    estadoNivel = 'completado';
+                    iconoCheckpoint = '✓';
+                    if (flujoAuth.tesoreria?.fecha || solicitud.fechaPago) {
+                        fechaHTML = `<div class="timeline-fecha">Pagado: ${formatearFecha(flujoAuth.tesoreria?.fecha || solicitud.fechaPago)}</div>`;
+                    }
+                    if (flujoAuth.tesoreria?.usuario) {
+                        usuarioHTML = `<div class="timeline-usuario">Por: ${flujoAuth.tesoreria.usuario}</div>`;
+                    }
+                } else if (solicitud.estado === 'pendiente_tesoreria') {
+                    estadoNivel = 'actual';
+                    iconoCheckpoint = '⏳';
+                }
+            }
+        }
+        
+        timelineHTML += `
+            <div class="timeline-item">
+                <div class="timeline-checkpoint ${estadoNivel}">
+                    ${iconoCheckpoint}
+                </div>
+                <div class="timeline-content ${estadoNivel}">
+                    <div class="timeline-header">
+                        <div class="timeline-departamento">${nivel.nombre}</div>
+                        <span class="timeline-badge ${nivel.accion}">${nivel.accion}</span>
+                    </div>
+                    <div class="timeline-tipo">${nivel.tipo.charAt(0).toUpperCase() + nivel.tipo.slice(1)}</div>
+                    ${fechaHTML}
+                    ${usuarioHTML}
+                </div>
+            </div>
+        `;
+    });
+    
+    timelineHTML += '</div>';
+    timeline.innerHTML = timelineHTML;
+    
+    modal.style.display = 'block';
+}
+
+function cerrarModalFlujoAutorizacion() {
+    document.getElementById('flujoAutorizacionModal').style.display = 'none';
+}
+
+// ============================================
+// SISTEMA DE AUTORIZACIONES POR NIVELES
+// ============================================
+
+// Obtener el texto legible del estado
+function obtenerTextoEstado(estado) {
+    const textos = {
+        'nueva': 'SOLICITUD NUEVA',
+        'pendiente_jefe': 'PENDIENTE: Jefe de Sucursal',
+        'pendiente_gerencia': 'PENDIENTE: Gerencia',
+        'pendiente_dir_operaciones': 'PENDIENTE: Dirección de Operaciones',
+        'pendiente_contabilidad': 'PENDIENTE: Contabilidad (Revisión)',
+        'pendiente_dir_general': 'PENDIENTE: Dirección General',
+        'pendiente_tesoreria': 'PENDIENTE: Tesorería (Pago)',
+        'pagada': 'PAGADA',
+        'cancelada': 'CANCELADA',
+        'rechazada': 'RECHAZADA'
+    };
+    return textos[estado] || estado.toUpperCase();
+}
+
+// Determinar el estado actual de una solicitud basado en su flujo
+function determinarEstadoSolicitud(solicitud) {
+    if (solicitud.estado === 'cancelada') return 'cancelada';
+    if (solicitud.estado === 'rechazada') return 'rechazada';
+    if (solicitud.estado === 'pagada') return 'pagada';
+    
+    const flujo = solicitud.flujoAutorizacion;
+    if (!flujo) return 'nueva';
+    
+    // Verificar cada nivel en orden
+    if (flujo.jefe_sucursal?.requerido && !flujo.jefe_sucursal?.autorizado) {
+        return 'pendiente_jefe';
+    }
+    
+    if (flujo.gerencia?.requerido && !flujo.gerencia?.autorizado) {
+        return 'pendiente_gerencia';
+    }
+    
+    if (flujo.direccion_operaciones?.requerido && !flujo.direccion_operaciones?.autorizado) {
+        return 'pendiente_dir_operaciones';
+    }
+    
+    if (flujo.contabilidad?.requerido && !flujo.contabilidad?.revisado) {
+        return 'pendiente_contabilidad';
+    }
+    
+    if (flujo.direccion_general?.requerido && !flujo.direccion_general?.autorizado) {
+        return 'pendiente_dir_general';
+    }
+    
+    if (flujo.tesoreria?.requerido && !flujo.tesoreria?.pagado) {
+        return 'pendiente_tesoreria';
+    }
+    
+    return 'nueva';
+}
+
+// Verificar si el usuario actual puede autorizar/revisar/pagar esta solicitud
+function puedeActuarEnSolicitud(solicitud) {
+    if (!usuarioActual) return { puede: false, razon: 'No hay usuario' };
+    if (solicitud.estado === 'cancelada') return { puede: false, razon: 'Solicitud cancelada' };
+    if (solicitud.estado === 'rechazada') return { puede: false, razon: 'Solicitud rechazada' };
+    if (solicitud.estado === 'pagada') return { puede: false, razon: 'Ya pagada' };
+    
+    const rol = usuarioActual.rol;
+    const flujo = solicitud.flujoAutorizacion;
+
+    if (!flujo) return { puede: false, razon: 'Sin flujo de autorización' };
+
+    // Admin puede autorizar cualquier nivel
+    if (rol === 'admin') {
+        return { puede: true, accion: 'autorizar', texto: '✓', tooltip: 'Autorizar (Admin)' };
+    }
+
+    // Nadie puede autorizar/revisar/pagar su propia solicitud
+    if (solicitud.creadoPor === usuarioActual.username) {
+        return { puede: false, razon: 'No puedes autorizar tu propia solicitud' };
+    }
+
+    // Jefe de Sucursal
+    if (rol === 'jefe') {
+        if (flujo.jefe_sucursal?.requerido && !flujo.jefe_sucursal?.autorizado) {
+            // Verificar que sea de la misma sucursal
+            if (usuarioActual.sucursal === solicitud.sucursal) {
+                return { puede: true, accion: 'autorizar_jefe', texto: '✓', tooltip: 'Autorizar' };
+            }
+        }
+        return { puede: false, razon: 'No es tu turno o no es tu sucursal' };
+    }
+    
+    // Gerencia de Sucursales
+    if (rol === 'gerencia_sucursales') {
+        if (flujo.gerencia?.requerido && !flujo.gerencia?.autorizado && flujo.gerencia?.tipo === 'GCS') {
+            // Verificar que el jefe ya autorizó (si era requerido)
+            if (flujo.jefe_sucursal?.requerido && !flujo.jefe_sucursal?.autorizado) {
+                return { puede: false, razon: 'Falta autorización del Jefe de Sucursal' };
+            }
+            return { puede: true, accion: 'autorizar_gerencia', texto: '✓', tooltip: 'Autorizar' };
+        }
+        return { puede: false, razon: 'No es tu turno' };
+    }
+    
+    // Gerencia de Centro
+    if (rol === 'gerencia_centro') {
+        if (flujo.gerencia?.requerido && !flujo.gerencia?.autorizado && flujo.gerencia?.tipo === 'GCC') {
+            return { puede: true, accion: 'autorizar_gerencia', texto: '✓', tooltip: 'Autorizar' };
+        }
+        return { puede: false, razon: 'No es tu turno' };
+    }
+    
+    // Dirección de Operaciones
+    if (rol === 'direccion_operaciones') {
+        if (flujo.direccion_operaciones?.requerido && !flujo.direccion_operaciones?.autorizado) {
+            // Verificar que la gerencia ya autorizó
+            if (flujo.gerencia?.requerido && !flujo.gerencia?.autorizado) {
+                return { puede: false, razon: 'Falta autorización de Gerencia' };
+            }
+            return { puede: true, accion: 'autorizar_dir_operaciones', texto: '✓', tooltip: 'Autorizar' };
+        }
+        return { puede: false, razon: 'No es tu turno' };
+    }
+    
+    // Contabilidad (REVISA)
+    if (rol === 'contabilidad') {
+        if (flujo.contabilidad?.requerido && !flujo.contabilidad?.revisado) {
+            // Verificar que Dir. Operaciones ya autorizó
+            if (flujo.direccion_operaciones?.requerido && !flujo.direccion_operaciones?.autorizado) {
+                return { puede: false, razon: 'Falta autorización de Dirección de Operaciones' };
+            }
+            return { puede: true, accion: 'revisar_contabilidad', texto: '👁️', tooltip: 'Revisar' };
+        }
+        return { puede: false, razon: 'No es tu turno' };
+    }
+    
+    // Dirección General
+    if (rol === 'direccion_general') {
+        if (flujo.direccion_general?.requerido && !flujo.direccion_general?.autorizado) {
+            // Verificar que Contabilidad ya revisó (si era requerido)
+            if (flujo.contabilidad?.requerido && !flujo.contabilidad?.revisado) {
+                return { puede: false, razon: 'Falta revisión de Contabilidad' };
+            }
+            return { puede: true, accion: 'autorizar_dir_general', texto: '✓', tooltip: 'Autorizar' };
+        }
+        return { puede: false, razon: 'No es tu turno' };
+    }
+    
+    // Tesorería (PAGA)
+    if (rol === 'tesoreria') {
+        if (flujo.tesoreria?.requerido && !flujo.tesoreria?.pagado) {
+            // Verificar que Dir. General ya autorizó
+            if (flujo.direccion_general?.requerido && !flujo.direccion_general?.autorizado) {
+                return { puede: false, razon: 'Falta autorización de Dirección General' };
+            }
+            return { puede: true, accion: 'pagar_tesoreria', texto: '💰', tooltip: 'Pagar (subir comprobante)' };
+        }
+        return { puede: false, razon: 'No es tu turno' };
+    }
+    
+    return { puede: false, razon: 'Rol sin permisos de autorización' };
+}
+
+// Ejecutar la acción de autorización/revisión/pago
+async function ejecutarAccionAutorizacion(solicitudId) {
+    const solicitud = solicitudes.find(s => s.id === solicitudId);
+    if (!solicitud) {
+        alert('Solicitud no encontrada');
+        return;
+    }
+    
+    const accion = puedeActuarEnSolicitud(solicitud);
+    if (!accion.puede) {
+        alert(`No puedes realizar esta acción: ${accion.razon}`);
+        return;
+    }
+    
+    const confirmTexto = accion.tooltip;
+    if (!confirm(`¿Está seguro de ${confirmTexto.toLowerCase()} esta solicitud?`)) {
+        return;
+    }
+    
+    const ahora = new Date().toISOString();
+    const flujo = solicitud.flujoAutorizacion;
+    
+    // Ejecutar la acción según el tipo
+    switch (accion.accion) {
+        case 'autorizar_jefe':
+            flujo.jefe_sucursal.autorizado = true;
+            flujo.jefe_sucursal.fecha = ahora;
+            flujo.jefe_sucursal.usuario = usuarioActual.username;
+            break;
+            
+        case 'autorizar_gerencia':
+            flujo.gerencia.autorizado = true;
+            flujo.gerencia.fecha = ahora;
+            flujo.gerencia.usuario = usuarioActual.username;
+            break;
+            
+        case 'autorizar_dir_operaciones':
+            flujo.direccion_operaciones.autorizado = true;
+            flujo.direccion_operaciones.fecha = ahora;
+            flujo.direccion_operaciones.usuario = usuarioActual.username;
+            break;
+            
+        case 'revisar_contabilidad':
+            flujo.contabilidad.revisado = true;
+            flujo.contabilidad.fecha = ahora;
+            flujo.contabilidad.usuario = usuarioActual.username;
+            break;
+            
+        case 'autorizar_dir_general':
+            flujo.direccion_general.autorizado = true;
+            flujo.direccion_general.fecha = ahora;
+            flujo.direccion_general.usuario = usuarioActual.username;
+            break;
+            
+        case 'pagar_tesoreria':
+            // Tesorería paga mediante el comprobante
+            alert('Para marcar como pagada, sube el comprobante de pago en la columna de Archivos');
+            return;
+            
+        case 'autorizar':
+            // Admin puede autorizar cualquier nivel pendiente
+            alert('Como Admin, debes especificar qué nivel quieres autorizar. Usa el flujo de autorización para ver los detalles.');
+            return;
+    }
+    
+    // Actualizar estado de la solicitud
+    solicitud.estado = determinarEstadoSolicitud(solicitud);
+    
+    // Guardar cambios
+    mostrarCargando(true);
+    try {
+        await actualizarSolicitudSupabase(solicitud);
+        
+        // Actualizar array local
+        const index = solicitudes.findIndex(s => s.id === solicitudId);
+        if (index !== -1) {
+            solicitudes[index] = { ...solicitud };
+        }
+        
+        mostrarCargando(false);
+        alert(`${confirmTexto} realizado exitosamente`);
+        cargarSolicitudes();
+    } catch (error) {
+        mostrarCargando(false);
+        console.error('Error al actualizar solicitud:', error);
+        alert('Error al guardar los cambios');
+    }
+}
+
+// Rechazar una solicitud en el nivel de autorización actual del usuario
+async function rechazarSolicitud(solicitudId) {
+    const solicitud = solicitudes.find(s => s.id === solicitudId);
+    if (!solicitud) {
+        alert('Solicitud no encontrada');
+        return;
+    }
+
+    const accion = puedeActuarEnSolicitud(solicitud);
+    if (!accion.puede) {
+        alert(`No puedes realizar esta acción: ${accion.razon}`);
+        return;
+    }
+
+    const motivo = prompt('Motivo del rechazo:');
+    if (motivo === null) return; // Cancelado por el usuario
+    if (!motivo.trim()) {
+        alert('Debes indicar un motivo de rechazo');
+        return;
+    }
+
+    if (!confirm('¿Está seguro de rechazar esta solicitud?')) {
+        return;
+    }
+
+    solicitud.estado = 'rechazada';
+    solicitud.rechazo = {
+        usuario: usuarioActual.username,
+        fecha: new Date().toISOString(),
+        motivo: motivo.trim(),
+        nivel: accion.accion
+    };
+
+    mostrarCargando(true);
+    try {
+        await actualizarSolicitudSupabase(solicitud);
+
+        const index = solicitudes.findIndex(s => s.id === solicitudId);
+        if (index !== -1) {
+            solicitudes[index] = { ...solicitud };
+        }
+
+        mostrarCargando(false);
+        alert('Solicitud rechazada');
+        cargarSolicitudes();
+    } catch (error) {
+        mostrarCargando(false);
+        console.error('Error al rechazar la solicitud:', error);
+        alert('Error al guardar los cambios');
+    }
+}
+
+// Migrar solicitudes antiguas al nuevo formato
+async function migrarSolicitudesAntiguasAlNuevoFlujo() {
+    let solicitudesMigradas = 0;
+    
+    for (let solicitud of solicitudes) {
+        // Si ya tiene flujo, no hacer nada
+        if (solicitud.flujoAutorizacion) continue;
+        
+        console.log(`Migrando solicitud ${solicitud.numero}...`);
+        
+        // Determinar gerencia
+        const gerenciaTipo = ['AGS', 'LEO', 'CAN', 'MTY', 'GDL', 'VSA', 'COS'].includes(solicitud.sucursal) ? 'GCS' : 'GCC';
+        
+        // Verificar si es DESPACHO
+        const empresaObj = empresas.find(e => e.id === solicitud.empresaId);
+        const esDespacho = esEmpresaDespacho(parseInt(solicitud.empresaId));
+        
+        // Crear flujo basado en el estado actual
+        const flujo = {
+            jefe_sucursal: {
+                requerido: false,  // No sabemos si fue creado por auxiliar
+                autorizado: false,
+                fecha: null,
+                usuario: null
+            },
+            gerencia: {
+                tipo: gerenciaTipo,
+                requerido: true,
+                autorizado: solicitud.estado === 'autorizada' || solicitud.estado === 'pagada',
+                fecha: solicitud.estado === 'autorizada' || solicitud.estado === 'pagada' ? solicitud.fechaAutorizacion : null,
+                usuario: null
+            },
+            direccion_operaciones: {
+                requerido: true,
+                autorizado: solicitud.estado === 'autorizada' || solicitud.estado === 'pagada',
+                fecha: solicitud.estado === 'autorizada' || solicitud.estado === 'pagada' ? solicitud.fechaAutorizacion : null,
+                usuario: null
+            },
+            contabilidad: {
+                requerido: !esDespacho,
+                revisado: solicitud.estado === 'autorizada' || solicitud.estado === 'pagada',
+                fecha: solicitud.estado === 'autorizada' || solicitud.estado === 'pagada' ? solicitud.fechaAutorizacion : null,
+                usuario: null
+            },
+            direccion_general: {
+                requerido: true,
+                autorizado: solicitud.estado === 'autorizada' || solicitud.estado === 'pagada',
+                fecha: solicitud.estado === 'autorizada' || solicitud.estado === 'pagada' ? solicitud.fechaAutorizacion : null,
+                usuario: null
+            },
+            tesoreria: {
+                requerido: true,
+                pagado: solicitud.estado === 'pagada',
+                fecha: solicitud.fechaPago || null,
+                usuario: null
+            }
+        };
+        
+        solicitud.flujoAutorizacion = flujo;
+        
+        // Actualizar estado
+        if (solicitud.estado === 'pendiente') {
+            solicitud.estado = 'nueva';
+        }
+        
+        solicitudesMigradas++;
+    }
+    
+    if (solicitudesMigradas > 0) {
+        console.log(`✓ ${solicitudesMigradas} solicitudes migradas al nuevo sistema`);
+        
+        // Guardar todas las solicitudes migradas
+        mostrarCargando(true);
+        for (let solicitud of solicitudes) {
+            if (solicitud.flujoAutorizacion) {
+                await actualizarSolicitudSupabase(solicitud);
+            }
+        }
+        mostrarCargando(false);
+        
+        alert(`Se migraron ${solicitudesMigradas} solicitudes al nuevo sistema de autorizaciones`);
+    }
+}
+
+// ============================================
+// FUNCIÓN HELPER: Verificar si es DESPACHO S/C
+// ============================================
+
+function esEmpresaDespacho(empresaId) {
+    const empresa = empresas.find(e => e.id === empresaId);
+    if (!empresa) return false;
+    
+    const razonSocial = empresa.razonSocial.toUpperCase();
+    const rfc = empresa.rfc.toUpperCase();
+    
+    // Lista de patrones que identifican a DESPACHO S/C
+    const patronesDespacho = [
+        'DESPACHO S/C',
+        'DESPACHO SC',
+        'DESPACHO',
+        'DESP S/C'
+    ];
+    
+    return patronesDespacho.some(patron => 
+        razonSocial.includes(patron) || rfc.includes(patron)
+    );
 }
