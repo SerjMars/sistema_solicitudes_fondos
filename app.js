@@ -1,173 +1,29 @@
 // SECCIÓN 1 - Variables globales y funciones de inicialización
 
-let usuarios = {
-    // ADMIN
-    'admin_unico': { 
-        password: 'admin2025', 
-        rol: 'admin', 
-        sucursal: null, 
-        nombre: 'Administrador General',
-        gerencia: null,
-        empresaId: null,
-        empresasIds: null
-    },
-    // AUXILIARES ADMINISTRATIVOS (nuevo rol)
-    'ags_auxiliar': { 
-        password: 'ags_aux2025', 
-        rol: 'auxiliar', 
-        sucursal: 'AGS', 
-        nombre: 'Auxiliar Aguascalientes',
-        gerencia: 'GCS',
-        empresaId: null,
-        empresasIds: null
-    },
-    'leo_auxiliar': { 
-        password: 'leo_aux2025', 
-        rol: 'auxiliar', 
-        sucursal: 'LEO', 
-        nombre: 'Auxiliar León',
-        gerencia: 'GCS',
-        empresaId: null,
-        empresasIds: null
-    },
-    // JEFES DE SUCURSAL (requieren sucursal y gerencia)
-    'ags_jefe': { 
-        password: 'ags2025', 
-        rol: 'jefe', 
-        sucursal: 'AGS', 
-        nombre: 'Jefe Aguascalientes',
-        gerencia: 'GCS',  // ✅ Pertenece a Gerencia de Sucursales
-        empresaId: null,
-        empresasIds: null
-    },
-    'leo_jefe': { 
-        password: 'leo2025', 
-        rol: 'jefe', 
-        sucursal: 'LEO', 
-        nombre: 'Jefe León',
-        gerencia: 'GCS',
-        empresaId: null,
-        empresasIds: null
-    },
-    'can_jefe': { 
-        password: 'can2025', 
-        rol: 'jefe', 
-        sucursal: 'CAN', 
-        nombre: 'Jefe Cancún',
-        gerencia: 'GCS',
-        empresaId: null,
-        empresasIds: null
-    },
-    'mty_jefe': { 
-        password: 'mty2025', 
-        rol: 'jefe', 
-        sucursal: 'MTY', 
-        nombre: 'Jefe Monterrey',
-        gerencia: 'GCS',
-        empresaId: null,
-        empresasIds: null
-    },
-    'gdl_jefe': { 
-        password: 'gdl2025', 
-        rol: 'jefe', 
-        sucursal: 'GDL', 
-        nombre: 'Jefe Guadalajara',
-        gerencia: 'GCS',
-        empresaId: null,
-        empresasIds: null
-    },
-    'vsa_jefe': { 
-        password: 'vsa2025', 
-        rol: 'jefe', 
-        sucursal: 'VSA', 
-        nombre: 'Jefe Villahermosa',
-        gerencia: 'GCS',
-        empresaId: null,
-        empresasIds: null
-    },
-    
-    // COORDINADORES (requieren gerencia, pueden o no tener sucursal)
-    'coordinador_sucursales': { 
-        password: 'cos2025', 
-        rol: 'coordinador', 
-        sucursal: 'COS',  // Coordinador de Sucursales
-        nombre: 'Coordinador de Sucursales',
-        gerencia: 'GCS',
-        empresaId: null,
-        empresasIds: null
-    },
-    'coordinador_monitoreo': {
-        password: 'mon2025',
-        rol: 'coordinador',
-        sucursal: 'MON',
-        nombre: 'Coordinador de Monitoreo e Iluminación',
-        gerencia: 'GCC',  // ✅ Pertenece a Gerencia de Centro
-        empresaId: null,
-        empresasIds: null
-    },
-    
-    // GERENCIAS (nuevos roles)
-    'gerente_sucursales': {
-        password: 'gcs2025',
-        rol: 'gerencia_sucursales',
-        sucursal: null,
-        nombre: 'Gerente de Sucursales',
-        gerencia: null,  // Es la gerencia misma
-        empresaId: null,
-        empresasIds: null
-    },
-    'gerente_centro': {
-        password: 'gcc2025',
-        rol: 'gerencia_centro',
-        sucursal: null,
-        nombre: 'Gerente de Centro',
-        gerencia: null,
-        empresaId: null,
-        empresasIds: null
-    },
-    
-    // DIRECCIONES (nuevos roles)
-    'director_operaciones': {
-        password: 'dop2025',
-        rol: 'direccion_operaciones',
-        sucursal: null,
-        nombre: 'Director de Operaciones',
-        gerencia: null,
-        empresaId: null,
-        empresasIds: null
-    },
-    'director_general': {
-        password: 'dir2025',
-        rol: 'direccion_general',
-        sucursal: null,
-        nombre: 'Director General',
-        gerencia: null,
-        empresaId: null,
-        empresasIds: null
-    },
-    
-    // CONTABILIDAD (requiere una empresa)
-    'contabilidad_user': {
-        password: 'cont2025',
-        rol: 'contabilidad',
-        sucursal: null,
-        nombre: 'Usuario Contabilidad',
-        gerencia: null,
-        empresaId: 1,  // ✅ Asignado a una empresa específica
-        empresasIds: null
-    },
-    
-    // TESORERÍA (puede tener múltiples empresas)
-    'tesoreria_user': {
-        password: 'tes2025',
-        rol: 'tesoreria',
-        sucursal: null,
-        nombre: 'Usuario Tesorería',
-        gerencia: null,
-        empresaId: null,
-        empresasIds: [1, 2, 3]  // ✅ Puede atender múltiples empresas
+// Caché local de usuarios (sin contraseñas). Se llena desde Supabase con
+// cargarUsuariosDesdeSupabase(); nunca contiene el hash ni la contraseña.
+let usuarios = {};
+
+// Carga/refresca la caché de usuarios desde Supabase (vía RPC, nunca expone password_hash)
+async function cargarUsuariosDesdeSupabase() {
+    const { data, error } = await window.supabase.rpc('listar_usuarios');
+    if (error) {
+        console.error('Error al cargar usuarios:', error);
+        return;
     }
-};
+    const nuevosUsuarios = {};
+    (data || []).forEach(u => {
+        nuevosUsuarios[u.username] = {
+            rol: u.rol,
+            sucursal: u.sucursal,
+            nombre: u.nombre,
+            gerencia: u.gerencia,
+            empresaId: u.empresa_id,
+            empresasIds: u.empresas_ids
+        };
+    });
+    usuarios = nuevosUsuarios;
+}
 
 // Definición de permisos disponibles
 const permisosDisponibles = {
@@ -482,6 +338,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     verificarVersionConfiguracion();
     await window.supabaseListo;
     await cargarDatosDesdeSupabase();
+    await cargarUsuariosDesdeSupabase();
     await migrarSolicitudesAntiguasAlNuevoFlujo();
     verificarSesion();
     inicializarCamposMoneda();
@@ -524,35 +381,56 @@ function verificarSesion() {
     }
 }
 
-function iniciarSesion(event) {
+async function iniciarSesion(event) {
     event.preventDefault();
-    
+
     const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
     const errorDiv = document.getElementById('loginError');
-    
-    if (usuarios[username] && usuarios[username].password === password) {
+    const submitButton = document.querySelector('#loginForm button[type="submit"]');
+
+    if (submitButton) submitButton.disabled = true;
+
+    try {
+        const { data, error } = await window.supabase.rpc('login_usuario', {
+            p_username: username,
+            p_password: password
+        });
+
+        if (error) {
+            console.error('Error al iniciar sesión:', error);
+            errorDiv.textContent = 'Error al conectar con el servidor. Intenta de nuevo.';
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        if (!data || data.length === 0) {
+            errorDiv.textContent = 'Usuario o contraseña incorrectos';
+            errorDiv.style.display = 'block';
+            document.getElementById('loginPassword').value = '';
+            return;
+        }
+
+        const usuario = data[0];
         usuarioActual = {
-            username: username,
-            nombre: usuarios[username].nombre,
-            rol: usuarios[username].rol,
-            sucursal: usuarios[username].sucursal,
-            gerencia: usuarios[username].gerencia,
-            empresaId: usuarios[username].empresaId,
-            empresasIds: usuarios[username].empresasIds
+            username: usuario.username,
+            nombre: usuario.nombre,
+            rol: usuario.rol,
+            sucursal: usuario.sucursal,
+            gerencia: usuario.gerencia,
+            empresaId: usuario.empresa_id,
+            empresasIds: usuario.empresas_ids
         };
-        
+
         sessionStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
-        
+
         document.getElementById('loginUsername').value = '';
         document.getElementById('loginPassword').value = '';
         errorDiv.style.display = 'none';
-        
+
         mostrarAplicacion();
-    } else {
-        errorDiv.textContent = 'Usuario o contraseña incorrectos';
-        errorDiv.style.display = 'block';
-        document.getElementById('loginPassword').value = '';
+    } finally {
+        if (submitButton) submitButton.disabled = false;
     }
 }
 
@@ -651,69 +529,67 @@ function cerrarModalCambioPassword() {
     document.getElementById('passwordError').style.display = 'none';
 }
 
-function cambiarContrasena(event) {
+async function cambiarContrasena(event) {
     event.preventDefault();
-    
+
     const passwordActual = document.getElementById('passwordActual').value;
     const passwordNueva = document.getElementById('passwordNueva').value;
     const passwordConfirmar = document.getElementById('passwordConfirmar').value;
     const errorDiv = document.getElementById('passwordError');
-    
-    if (!usuarioActual || !usuarios[usuarioActual.username]) {
+
+    if (!usuarioActual) {
         errorDiv.textContent = 'Error: Usuario no válido';
         errorDiv.style.display = 'block';
         return;
     }
-    
-    if (usuarios[usuarioActual.username].password !== passwordActual) {
-        errorDiv.textContent = 'La contraseña actual es incorrecta';
-        errorDiv.style.display = 'block';
-        return;
-    }
-    
+
     if (passwordNueva.length < 6) {
         errorDiv.textContent = 'La nueva contraseña debe tener al menos 6 caracteres';
         errorDiv.style.display = 'block';
         return;
     }
-    
+
     if (passwordNueva !== passwordConfirmar) {
         errorDiv.textContent = 'Las contraseñas nuevas no coinciden';
         errorDiv.style.display = 'block';
         return;
     }
-    
+
     if (passwordNueva === passwordActual) {
         errorDiv.textContent = 'La nueva contraseña debe ser diferente a la actual';
         errorDiv.style.display = 'block';
         return;
     }
-    
-    usuarios[usuarioActual.username].password = passwordNueva;
-    
-    localStorage.setItem('usuarios', JSON.stringify(usuarios));
-    
-    alert('Contraseña cambiada exitosamente. Por favor inicie sesión nuevamente.');
-    cerrarModalCambioPassword();
-    cerrarSesion();
-}
 
-function cargarUsuariosDesdeStorage() {
-    const usuariosGuardados = localStorage.getItem('usuarios');
-    if (usuariosGuardados) {
-        try {
-            usuarios = JSON.parse(usuariosGuardados);
-        } catch (e) {
-            console.error('Error al cargar usuarios:', e);
+    try {
+        const { data, error } = await window.supabase.rpc('cambiar_password_propia', {
+            p_username: usuarioActual.username,
+            p_password_actual: passwordActual,
+            p_password_nueva: passwordNueva
+        });
+
+        if (error) {
+            console.error('Error al cambiar contraseña:', error);
+            errorDiv.textContent = 'Error al conectar con el servidor. Intenta de nuevo.';
+            errorDiv.style.display = 'block';
+            return;
         }
+
+        if (!data) {
+            errorDiv.textContent = 'La contraseña actual es incorrecta';
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        alert('Contraseña cambiada exitosamente. Por favor inicie sesión nuevamente.');
+        cerrarModalCambioPassword();
+        cerrarSesion();
+    } catch (error) {
+        console.error('Error al cambiar contraseña:', error);
+        errorDiv.textContent = 'Error al conectar con el servidor. Intenta de nuevo.';
+        errorDiv.style.display = 'block';
     }
 }
-
-function guardarUsuariosEnStorage() {
-    localStorage.setItem('usuarios', JSON.stringify(usuarios));
-}
-
-cargarUsuariosDesdeStorage();
 
 function getSucursalName(code) {
     const nombres = {
@@ -1983,6 +1859,7 @@ async function crearSolicitud(event) {
         const requiereJefe = usuarioActual.rol === 'auxiliar';
 
         if (requiereJefe) {
+            await cargarUsuariosDesdeSupabase();
             const hayJefeAsignado = Object.values(usuarios).some(u => u.rol === 'jefe' && u.sucursal === sucursal);
             if (!hayJefeAsignado) {
                 alert(`No hay un Jefe de Sucursal asignado para "${sucursal}". La solicitud quedaría sin poder avanzar. Pide al administrador que asigne un Jefe de Sucursal antes de crearla.`);
@@ -4153,10 +4030,12 @@ function cerrarModalArchivos() {
 
 // SECCIÓN 4 - Gestión de usuario
 
-function cargarUsuarios() {
+async function cargarUsuarios() {
+    await cargarUsuariosDesdeSupabase();
+
     const tbody = document.querySelector('#usuariosTable tbody');
     tbody.innerHTML = '';
-    
+
     Object.keys(usuarios).forEach(username => {
         const usuario = usuarios[username];
         const row = tbody.insertRow();
@@ -4207,11 +4086,13 @@ function mostrarFormularioUsuario(username = null) {
         // MODO EDICIÓN
         title.textContent = 'Editar Usuario';
         const usuario = usuarios[username];
-        
+
         document.getElementById('usuarioUsername').value = username;
         document.getElementById('usuarioUsername').readOnly = true;
         document.getElementById('usuarioNombre').value = usuario.nombre;
-        document.getElementById('usuarioPassword').value = usuario.password;
+        document.getElementById('usuarioPassword').value = '';
+        document.getElementById('usuarioPassword').required = false;
+        document.getElementById('usuarioPassword').placeholder = 'Dejar en blanco para mantener la actual';
         document.getElementById('usuarioRol').value = usuario.rol;
         document.getElementById('usuarioSucursal').value = usuario.sucursal || '';
         
@@ -4252,8 +4133,10 @@ function mostrarFormularioUsuario(username = null) {
         // MODO CREACIÓN
         title.textContent = 'Nuevo Usuario';
         document.getElementById('usuarioUsername').readOnly = false;
+        document.getElementById('usuarioPassword').required = true;
+        document.getElementById('usuarioPassword').placeholder = '';
     }
-    
+
     modal.style.display = 'block';
 }
 
@@ -4331,59 +4214,93 @@ function toggleSucursalField() {
     }
 }
 
-function eliminarUsuario(username) {
+async function eliminarUsuario(username) {
     if (username === 'admin_unico') {
         alert('No se puede eliminar el usuario administrador principal');
         return;
     }
-    
-    if (confirm(`¿Está seguro de eliminar el usuario ${username}?`)) {
-        delete usuarios[username];
-        guardarUsuariosEnStorage();
-        cargarUsuarios();
+
+    if (!confirm(`¿Está seguro de eliminar el usuario ${username}?`)) {
+        return;
+    }
+
+    try {
+        const { error } = await window.supabase.rpc('eliminar_usuario', { p_username: username });
+        if (error) throw error;
+
+        await cargarUsuarios();
         alert('Usuario eliminado exitosamente');
+    } catch (error) {
+        console.error('Error al eliminar usuario:', error);
+        alert('Error al eliminar el usuario');
     }
 }
 
-function guardarUsuario(event) {
+async function guardarUsuario(event) {
     event.preventDefault();
-    
+
     const username = document.getElementById('usuarioUsername').value;
     const nombre = document.getElementById('usuarioNombre').value;
     const password = document.getElementById('usuarioPassword').value;
     const rol = document.getElementById('usuarioRol').value;
     const sucursal = document.getElementById('usuarioSucursal').value || null;
-    const gerencia = document.getElementById('usuarioGerencia').value || null;  // ✅ NUEVO
-    const empresaId = document.getElementById('usuarioEmpresa').value || null;  // ✅ NUEVO
-    
-    // ✅ NUEVO: Obtener múltiples empresas para Tesorería
+    const gerencia = document.getElementById('usuarioGerencia').value || null;
+    const empresaIdInput = document.getElementById('usuarioEmpresa').value || null;
+    const empresaId = empresaIdInput ? parseInt(empresaIdInput) : null;
+
+    // Obtener múltiples empresas para Tesorería
     let empresasIds = null;
     const empresasSelect = document.getElementById('usuarioEmpresas');
     if (empresasSelect && empresasSelect.options.length > 0) {
         empresasIds = Array.from(empresasSelect.selectedOptions).map(opt => parseInt(opt.value));
         if (empresasIds.length === 0) empresasIds = null;
     }
-    
+
     if (!editandoUsuario && usuarios[username]) {
         alert('El usuario ya existe');
         return;
     }
-    
-    usuarios[username] = {
-        password: password,
-        rol: rol,
-        sucursal: sucursal,
-        nombre: nombre,
-        gerencia: gerencia,        // ✅ NUEVO
-        empresaId: empresaId ? parseInt(empresaId) : null,  // ✅ NUEVO
-        empresasIds: empresasIds   // ✅ NUEVO
-    };
-    
-    guardarUsuariosEnStorage();
-    
-    cerrarModalUsuario();
-    cargarUsuarios();
-    alert(editandoUsuario ? 'Usuario actualizado exitosamente' : 'Usuario creado exitosamente');
+
+    if (!editandoUsuario && !password) {
+        alert('La contraseña es obligatoria para un usuario nuevo');
+        return;
+    }
+
+    try {
+        let error;
+        if (editandoUsuario) {
+            ({ error } = await window.supabase.rpc('actualizar_usuario', {
+                p_username: username,
+                p_password: password || null,
+                p_rol: rol,
+                p_sucursal: sucursal,
+                p_nombre: nombre,
+                p_gerencia: gerencia,
+                p_empresa_id: empresaId,
+                p_empresas_ids: empresasIds
+            }));
+        } else {
+            ({ error } = await window.supabase.rpc('crear_usuario', {
+                p_username: username,
+                p_password: password,
+                p_rol: rol,
+                p_sucursal: sucursal,
+                p_nombre: nombre,
+                p_gerencia: gerencia,
+                p_empresa_id: empresaId,
+                p_empresas_ids: empresasIds
+            }));
+        }
+
+        if (error) throw error;
+
+        cerrarModalUsuario();
+        await cargarUsuarios();
+        alert(editandoUsuario ? 'Usuario actualizado exitosamente' : 'Usuario creado exitosamente');
+    } catch (error) {
+        console.error('Error al guardar usuario:', error);
+        alert('Error al guardar el usuario: ' + (error.message || ''));
+    }
 }
 
 function cerrarModalUsuario() {
@@ -5291,13 +5208,14 @@ function guardarRol(event) {
 }
 
 // Eliminar rol
-function eliminarRol(codigoRol) {
+async function eliminarRol(codigoRol) {
     if (!rolesConfig[codigoRol].editable) {
         alert('Este rol está protegido y no puede ser eliminado');
         return;
     }
-    
-    // Verificar si hay usuarios con este rol
+
+    // Verificar si hay usuarios con este rol (datos frescos de Supabase)
+    await cargarUsuariosDesdeSupabase();
     const usuariosConRol = Object.keys(usuarios).filter(username => usuarios[username].rol === codigoRol);
     if (usuariosConRol.length > 0) {
         alert(`No se puede eliminar este rol porque hay ${usuariosConRol.length} usuario(s) asignado(s) a él. Primero cambie o elimine esos usuarios.`);
