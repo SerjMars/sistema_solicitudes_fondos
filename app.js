@@ -2145,6 +2145,9 @@ function limpiarFormulario() {
     console.log('Archivos XML:', Object.keys(archivosXMLGastos).length);
     console.log('Filas en tabla:', document.querySelectorAll('#bodyGastos tr').length);
     console.log('========================');
+
+    // Restaurar estado habilitado/deshabilitado del campo sucursal según el rol actual
+    configurarInterfazPorRol();
 }
 
 async function refrescarTodosDatos() {
