@@ -2520,8 +2520,8 @@ function editarSolicitud(id) {
     const solicitud = solicitudes.find(s => s.id === id);
     console.log('Solicitud encontrada:', solicitud);
     
-    if (!solicitud || solicitud.estado !== 'pendiente') {
-        alert('Solo se pueden editar solicitudes con estado pendiente');
+    if (!solicitud || (solicitud.estado !== 'nueva' && !solicitud.estado.startsWith('pendiente_'))) {
+        alert('Solo se pueden editar solicitudes que aún no han sido pagadas o canceladas');
         console.log('Estado de solicitud:', solicitud?.estado);
         return;
     }
