@@ -1685,9 +1685,9 @@ async function crearSolicitud(event) {
             return;
         }
         
-        if (solicitud.estado !== 'pendiente') {
-            alert('Solo se pueden editar solicitudes con estado pendiente');
-            console.error('Estado de solicitud no es pendiente:', solicitud.estado);
+        if (solicitud.estado !== 'nueva' && !solicitud.estado.startsWith('pendiente_')) {
+            alert('Solo se pueden editar solicitudes que aún no han sido pagadas o canceladas');
+            console.error('Estado de solicitud no editable:', solicitud.estado);
             return;
         }
         
