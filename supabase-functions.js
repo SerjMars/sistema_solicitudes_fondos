@@ -137,7 +137,7 @@ window.cargarBeneficiariosSupabase = async function(forzarRecarga = false) {
 }
 
 // ============================================
-// CARGAR SOLICITUDES (bajo demanda, SIN archivos)
+// CARGAR SOLICITUDES
 // ============================================
 window.cargarSolicitudesSupabase = async function(forzarRecarga = true) {
     if (!window.usarSupabase) {
@@ -186,7 +186,8 @@ window.cargarSolicitudesSupabase = async function(forzarRecarga = true) {
                 tipo_formato,
                 gastos_caja_chica,
                 flujo_autorizacion,
-                rechazo
+                rechazo,
+                archivos
             `)
             .order('id', { ascending: false });
         
@@ -231,7 +232,11 @@ window.cargarSolicitudesSupabase = async function(forzarRecarga = true) {
                     fechaSolicitud: s.fecha_solicitud,
                     fechaAutorizacion: s.fecha_autorizacion,
                     solicitudesVinculadas: s.solicitudes_vinculadas || [],
-                    archivos: [],
+                    archivos: (() => {
+                        if (!s.archivos) return [];
+                        try { return typeof s.archivos === 'string' ? JSON.parse(s.archivos) : s.archivos; }
+                        catch(e) { return []; }
+                    })(),
                     comprobantePago: s.comprobante_pago_url && s.comprobante_pago_nombre ? {
                         datos: s.comprobante_pago_url,
                         nombre: s.comprobante_pago_nombre

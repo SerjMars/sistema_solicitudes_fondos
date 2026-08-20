@@ -3762,17 +3762,7 @@ async function subirFacturaSolicitud(solicitudId) {
         </p>
     `;
     
-    // ✅ CARGAR ARCHIVOS BAJO DEMANDA (solo si no están ya cargados)
-    if (!solicitud.archivos || solicitud.archivos.length === 0) {
-        mostrarCargando(true);
-        try {
-            await cargarArchivosDeUnaolicitud(solicitudId);
-        } catch (error) {
-            console.error('Error al cargar archivos:', error);
-        } finally {
-            mostrarCargando(false);
-        }
-    }
+    // Archivos ya vienen cargados desde Supabase en la consulta principal
     
     const puedeDescargar = tienePermiso('descargar_archivos');
     
@@ -3826,14 +3816,7 @@ async function descargarArchivosZip(solicitudId) {
     
     mostrarCargando(true);
     
-    // ✅ CARGAR ARCHIVOS BAJO DEMANDA si no están cargados
-    if (!solicitud.archivos || solicitud.archivos.length === 0) {
-        try {
-            await cargarArchivosDeUnaSolicitud(solicitudId);
-        } catch (error) {
-            console.error('Error al cargar archivos:', error);
-        }
-    }
+    // Archivos ya vienen cargados desde Supabase en la consulta principal
     
     const zip = new JSZip();
     let totalArchivos = 0;
