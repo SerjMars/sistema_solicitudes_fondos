@@ -5905,9 +5905,33 @@ async function ejecutarAccionAutorizacion(solicitudId) {
             return;
             
         case 'autorizar':
-            // Admin puede autorizar cualquier nivel pendiente
-            alert('Como Admin, debes especificar qué nivel quieres autorizar. Usa el flujo de autorización para ver los detalles.');
-            return;
+            // Admin avanza el siguiente nivel pendiente en el flujo
+            if (flujo.jefe_sucursal?.requerido && !flujo.jefe_sucursal?.autorizado) {
+                flujo.jefe_sucursal.autorizado = true;
+                flujo.jefe_sucursal.fecha = ahora;
+                flujo.jefe_sucursal.usuario = usuarioActual.username;
+            } else if (flujo.gerencia?.requerido && !flujo.gerencia?.autorizado) {
+                flujo.gerencia.autorizado = true;
+                flujo.gerencia.fecha = ahora;
+                flujo.gerencia.usuario = usuarioActual.username;
+            } else if (flujo.direccion_operaciones?.requerido && !flujo.direccion_operaciones?.autorizado) {
+                flujo.direccion_operaciones.autorizado = true;
+                flujo.direccion_operaciones.fecha = ahora;
+                flujo.direccion_operaciones.usuario = usuarioActual.username;
+            } else if (flujo.contabilidad?.requerido && !flujo.contabilidad?.revisado) {
+                flujo.contabilidad.revisado = true;
+                flujo.contabilidad.fecha = ahora;
+                flujo.contabilidad.usuario = usuarioActual.username;
+            } else if (flujo.direccion_general?.requerido && !flujo.direccion_general?.autorizado) {
+                flujo.direccion_general.autorizado = true;
+                flujo.direccion_general.fecha = ahora;
+                flujo.direccion_general.usuario = usuarioActual.username;
+            } else if (flujo.tesoreria?.requerido && !flujo.tesoreria?.pagado) {
+                flujo.tesoreria.pagado = true;
+                flujo.tesoreria.fecha = ahora;
+                flujo.tesoreria.usuario = usuarioActual.username;
+            }
+            break;
     }
     
     // Actualizar estado de la solicitud
