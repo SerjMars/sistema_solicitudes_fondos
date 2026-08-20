@@ -1046,19 +1046,19 @@ function agregarFilaGasto() {
     
     fila.innerHTML = `
         <td>
-            <input type="date" id="fecha_${id}" class="gasto-campo" required 
+            <input type="date" id="fecha_${id}" class="gasto-campo"
                    value="${new Date().toISOString().split('T')[0]}">
         </td>
         <td>
-            <input type="text" id="factura_${id}" class="gasto-campo" placeholder="Núm. factura" required>
+            <input type="text" id="factura_${id}" class="gasto-campo" placeholder="Núm. factura">
         </td>
         <td>
-            <input type="text" id="descripcion_${id}" class="gasto-campo" placeholder="Descripción del gasto" required>
+            <input type="text" id="descripcion_${id}" class="gasto-campo" placeholder="Descripción del gasto">
         </td>
         <td>
             <div class="autocomplete-container">
-                <input type="text" id="proveedor_${id}" class="gasto-campo" 
-                       placeholder="Nombre del proveedor" required
+                <input type="text" id="proveedor_${id}" class="gasto-campo"
+                       placeholder="Nombre del proveedor"
                        oninput="mostrarAutocomplete(${id})"
                        onfocus="mostrarAutocomplete(${id})"
                        onblur="setTimeout(() => ocultarAutocomplete(${id}), 200)">
@@ -1066,7 +1066,7 @@ function agregarFilaGasto() {
             </div>
         </td>
         <td>
-            <input type="text" id="monto_${id}" class="gasto-campo" placeholder="$0.00" required
+            <input type="text" id="monto_${id}" class="gasto-campo" placeholder="$0.00"
                 oninput="formatearMoneda(this)" 
                 onblur="formatearMonedaCompleto(this); calcularTotalReembolso()"
                 onkeyup="calcularTotalReembolso()">
@@ -2696,21 +2696,21 @@ function cargarDatosCajaChicaEdicion(solicitud, solicitudId) {
             const fila = tbody.insertRow();
             fila.innerHTML = `
                 <td>
-                    <input type="date" id="fecha_${id}" class="gasto-campo" required 
+                    <input type="date" id="fecha_${id}" class="gasto-campo"
                            value="${gasto.fecha}">
                 </td>
                 <td>
-                    <input type="text" id="factura_${id}" class="gasto-campo" 
-                           placeholder="Núm. factura" required value="${gasto.factura}">
+                    <input type="text" id="factura_${id}" class="gasto-campo"
+                           placeholder="Núm. factura" value="${gasto.factura}">
                 </td>
                 <td>
-                    <input type="text" id="descripcion_${id}" class="gasto-campo" 
-                           placeholder="Descripción del gasto" required value="${gasto.descripcion}">
+                    <input type="text" id="descripcion_${id}" class="gasto-campo"
+                           placeholder="Descripción del gasto" value="${gasto.descripcion}">
                 </td>
                 <td>
                     <div class="autocomplete-container">
-                        <input type="text" id="proveedor_${id}" class="gasto-campo" 
-                               placeholder="Nombre del proveedor" required value="${gasto.proveedor}"
+                        <input type="text" id="proveedor_${id}" class="gasto-campo"
+                               placeholder="Nombre del proveedor" value="${gasto.proveedor}"
                                oninput="mostrarAutocomplete(${id})"
                                onfocus="mostrarAutocomplete(${id})"
                                onblur="setTimeout(() => ocultarAutocomplete(${id}), 200)">
@@ -2718,8 +2718,8 @@ function cargarDatosCajaChicaEdicion(solicitud, solicitudId) {
                     </div>
                 </td>
                 <td>
-                    <input type="text" id="monto_${id}" class="gasto-campo" 
-                           placeholder="$0.00" required value="$${gasto.monto.toLocaleString('es-MX', {minimumFractionDigits: 2})}"
+                    <input type="text" id="monto_${id}" class="gasto-campo"
+                           placeholder="$0.00" value="$${gasto.monto.toLocaleString('es-MX', {minimumFractionDigits: 2})}"
                         oninput="formatearMoneda(this)" 
                         onblur="formatearMonedaCompleto(this); calcularTotalReembolso()"
                         onkeyup="calcularTotalReembolso()">
