@@ -2271,20 +2271,21 @@ function cargarSolicitudes() {
                               style="${btnStyle} background: #b8860b; color: white;" title="Editar">✎</button>`
                     : `<button class="btn" disabled
                               style="${btnDisabled}" title="No editable">✎</button>`}
-                ${accionAutorizacion.puede
-                    ? `<button class="btn" onclick="ejecutarAccionAutorizacion(${solicitud.id})"
-                              style="${btnStyle} background: #3a7a3a; color: white;" title="${accionAutorizacion.tooltip}">${accionAutorizacion.texto}</button>`
-                    : `<button class="btn" disabled
-                              style="${btnDisabled}" title="${accionAutorizacion.razon || 'No autorizable'}">${accionAutorizacion.texto || '✓'}</button>`}
                 ${puedeCancelar
                     ? `<button class="btn" onclick="cancelarSolicitud(${solicitud.id})"
-                              style="${btnStyle} background: #d4820a; color: white;" title="Cancelar solicitud">✕</button>`
+                              style="${btnStyle} background: #d4820a; color: white;" title="Cancelar solicitud">✕ Cancelar</button>`
                     : `<button class="btn" disabled
-                              style="${btnDisabled}" title="Sin permiso para cancelar">✕</button>`}
+                              style="${btnDisabled}" title="Sin permiso para cancelar">✕ Cancelar</button>`}
                 ${accionAutorizacion.puede
                     ? `<button class="btn" onclick="rechazarSolicitud(${solicitud.id})"
-                              style="${btnStyle} background: #b22222; color: white; grid-column: 1 / -1;" title="Rechazar solicitud">⛔ Rechazar</button>`
-                    : ''}
+                              style="${btnStyle} background: #b22222; color: white;" title="Rechazar solicitud">⛔ Rechazar</button>`
+                    : `<button class="btn" disabled
+                              style="${btnDisabled}" title="No puedes rechazar">⛔ Rechazar</button>`}
+                ${accionAutorizacion.puede
+                    ? `<button class="btn" onclick="ejecutarAccionAutorizacion(${solicitud.id})"
+                              style="${btnStyle} background: #3a7a3a; color: white; grid-column: 1 / -1;" title="${accionAutorizacion.tooltip}">${accionAutorizacion.texto} Autorizar</button>`
+                    : `<button class="btn" disabled
+                              style="${btnDisabled} grid-column: 1 / -1;" title="${accionAutorizacion.razon || 'No autorizable'}">${accionAutorizacion.texto || '✓'} Autorizar</button>`}
             </div>
         `;
         
