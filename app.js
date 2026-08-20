@@ -1690,8 +1690,34 @@ async function crearSolicitud(event) {
                 solicitud.montoConceptoGeneral = totalReembolsar;
                 solicitud.gastosCajaChica = gastos;
                 
+                // Subir archivos adjuntos generales nuevos (si los hay)
+                const archivosNuevos = await procesarArchivosNuevaSolicitud();
+                if (archivosNuevos.length > 0) {
+                    if (!solicitud.archivos) solicitud.archivos = [];
+                    for (const file of archivosNuevos) {
+                        try {
+                            const meta = await window.subirArchivoSolicitud(file, solicitud.id);
+                            solicitud.archivos.push(meta);
+                        } catch(e) { console.error('Error subiendo archivo adjunto:', e); }
+                    }
+                }
+
+                // Subir archivos de gastos nuevos (File objects en archivosPDFGastos/archivosXMLGastos)
+                solicitud.gastosCajaChica = await Promise.all(gastos.map(async (g, idx) => {
+                    const gasto = { ...g };
+                    if (g.archivoPDF instanceof File) {
+                        try { gasto.archivoPDF = await window.subirArchivoSolicitud(g.archivoPDF, solicitud.id, `gastos/${idx}`); }
+                        catch(e) { console.error('Error subiendo PDF gasto:', e); }
+                    }
+                    if (g.archivoXML instanceof File) {
+                        try { gasto.archivoXML = await window.subirArchivoSolicitud(g.archivoXML, solicitud.id, `gastos/${idx}`); }
+                        catch(e) { console.error('Error subiendo XML gasto:', e); }
+                    }
+                    return gasto;
+                }));
+
                 console.log('Datos actualizados, guardando en Supabase...');
-                
+
                 // Guardar en Supabase
                 await actualizarSolicitudSupabase(solicitud);
                 
@@ -1730,9 +1756,20 @@ async function crearSolicitud(event) {
                 solicitud.cuenta = document.getElementById('cuenta').value;
                 solicitud.clabe = document.getElementById('clabe').value;
                 solicitud.ciudad = '';
-                
+
+                // Subir archivos adjuntos generales nuevos (si los hay)
+                const archivosNuevosNormal = await procesarArchivosNuevaSolicitud();
+                if (archivosNuevosNormal.length > 0) {
+                    if (!solicitud.archivos) solicitud.archivos = [];
+                    for (const file of archivosNuevosNormal) {
+                        try {
+                            const meta = await window.subirArchivoSolicitud(file, solicitud.id);
+                            solicitud.archivos.push(meta);
+                        } catch(e) { console.error('Error subiendo archivo adjunto:', e); }
+                    }
+                }
+
                 await actualizarSolicitudSupabase(solicitud);
-                //await cargarDatosDesdeSupabase();
                 // Actualizar array local
                 const index = solicitudes.findIndex(s => s.id === solicitud.id);
                 if (index !== -1) {
