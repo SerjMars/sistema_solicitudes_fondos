@@ -2258,51 +2258,33 @@ function cargarSolicitudes() {
         const accionAutorizacion = puedeActuarEnSolicitud(solicitud);
         const puedeCancelar = tienePermiso('cancelar_solicitud');
         const puedeDescargarArchivos = tienePermiso('descargar_archivos');
-        const puedeEliminar = usuarioActual && usuarioActual.rol === 'admin'; // ✅ NUEVO
+
+        const btnStyle = 'padding: 6px 4px; font-size: 15px; width: 100%;';
+        const btnDisabled = `${btnStyle} background: #d0d0d0; color: #808080; cursor: not-allowed; opacity: 0.55;`;
 
         const botonesAccion = `
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 3px; max-width: 140px;">
-                <button class="btn" onclick="verDetalle(${solicitud.id})" 
-                        style="padding: 5px; font-size: 16px; background: #5a6268; color: white;" title="Ver detalle">
-                    ●
-                </button>
-                ${puedeEditar ? 
-                    `<button class="btn" onclick="editarSolicitud(${solicitud.id})" 
-                            style="padding: 5px; font-size: 16px; background: #b8860b; color: white;" title="Editar">
-                        ✎
-                    </button>` : 
-                    `<button class="btn" disabled 
-                            style="padding: 5px; font-size: 16px; background: #d0d0d0; color: #808080; cursor: not-allowed; opacity: 0.6;" title="No editable">
-                        ✎
-                    </button>`}
-                ${accionAutorizacion.puede ? 
-                    `<button class="btn" onclick="ejecutarAccionAutorizacion(${solicitud.id})" 
-                            style="padding: 5px; font-size: 16px; background: #5a8a5a; color: white;" title="${accionAutorizacion.tooltip}">
-                        ${accionAutorizacion.texto}
-                    </button>` : 
-                    `<button class="btn" disabled 
-                            style="padding: 5px; font-size: 16px; background: #d0d0d0; color: #808080; cursor: not-allowed; opacity: 0.6;" title="${accionAutorizacion.razon || 'No autorizable'}">
-                        ${accionAutorizacion.texto || '✓'}
-                    </button>`}
-                ${puedeCancelar ?
-                    `<button class="btn" onclick="cancelarSolicitud(${solicitud.id})"
-                            style="padding: 5px; font-size: 16px; background: #a05050; color: white;" title="Cancelar">
-                        ✕
-                    </button>` :
-                    `<button class="btn" disabled
-                            style="padding: 5px; font-size: 16px; background: #d0d0d0; color: #808080; cursor: not-allowed; opacity: 0.6;" title="No puede cancelar">
-                        ✕
-                    </button>`}
-                ${accionAutorizacion.puede ?
-                    `<button class="btn" onclick="rechazarSolicitud(${solicitud.id})"
-                            style="padding: 5px; font-size: 16px; background: #b22222; color: white; grid-column: 1 / -1;" title="Rechazar">
-                        ⛔ RECHAZAR
-                    </button>` : ''}
-                ${puedeEliminar ?
-                    `<button class="btn" onclick="eliminarSolicitud(${solicitud.id})" 
-                            style="padding: 5px; font-size: 16px; background: #8b0000; color: white; grid-column: 1 / -1;" title="Eliminar permanentemente (ADMIN)">
-                        🗑 ELIMINAR
-                    </button>` : ''}
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; width: 120px;">
+                <button class="btn" onclick="verDetalle(${solicitud.id})"
+                        style="${btnStyle} background: #5a6268; color: white;" title="Ver detalle">●</button>
+                ${puedeEditar
+                    ? `<button class="btn" onclick="editarSolicitud(${solicitud.id})"
+                              style="${btnStyle} background: #b8860b; color: white;" title="Editar">✎</button>`
+                    : `<button class="btn" disabled
+                              style="${btnDisabled}" title="No editable">✎</button>`}
+                ${accionAutorizacion.puede
+                    ? `<button class="btn" onclick="ejecutarAccionAutorizacion(${solicitud.id})"
+                              style="${btnStyle} background: #3a7a3a; color: white;" title="${accionAutorizacion.tooltip}">${accionAutorizacion.texto}</button>`
+                    : `<button class="btn" disabled
+                              style="${btnDisabled}" title="${accionAutorizacion.razon || 'No autorizable'}">${accionAutorizacion.texto || '✓'}</button>`}
+                ${puedeCancelar
+                    ? `<button class="btn" onclick="cancelarSolicitud(${solicitud.id})"
+                              style="${btnStyle} background: #d4820a; color: white;" title="Cancelar solicitud">✕</button>`
+                    : `<button class="btn" disabled
+                              style="${btnDisabled}" title="Sin permiso para cancelar">✕</button>`}
+                ${accionAutorizacion.puede
+                    ? `<button class="btn" onclick="rechazarSolicitud(${solicitud.id})"
+                              style="${btnStyle} background: #b22222; color: white; grid-column: 1 / -1;" title="Rechazar solicitud">⛔ Rechazar</button>`
+                    : ''}
             </div>
         `;
         
