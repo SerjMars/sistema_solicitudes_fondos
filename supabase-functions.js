@@ -617,6 +617,40 @@ window.subirArchivoSupabase = async function(file, carpeta = 'comprobantes') {
 }
 
 // ============================================
+// STORAGE: ARCHIVOS DE SOLICITUDES
+// ============================================
+const BUCKET_SOLICITUDES = 'solicitudes-archivos';
+
+window.subirArchivoSolicitud = async function(file, solicitudId, subcarpeta = '') {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = subcarpeta
+        ? `${solicitudId}/${subcarpeta}/${Date.now()}_${safeName}`
+        : `${solicitudId}/${Date.now()}_${safeName}`;
+
+    const { error } = await window.supabase.storage
+        .from(BUCKET_SOLICITUDES)
+        .upload(path, file, { cacheControl: '3600', upsert: true });
+
+    if (error) throw error;
+    return { path, nombre: file.name, tipo: file.type, fecha: new Date().toISOString() };
+};
+
+window.descargarBlobArchivoSolicitud = async function(path) {
+    const { data, error } = await window.supabase.storage
+        .from(BUCKET_SOLICITUDES)
+        .download(path);
+    if (error) throw error;
+    return data; // Blob
+};
+
+window.eliminarArchivoSolicitudStorage = async function(path) {
+    const { error } = await window.supabase.storage
+        .from(BUCKET_SOLICITUDES)
+        .remove([path]);
+    if (error) throw error;
+};
+
+// ============================================
 // FUNCIÓN PARA MOSTRAR/OCULTAR INDICADOR DE CARGA
 // ============================================
 window.mostrarCargando = function(mostrar) {

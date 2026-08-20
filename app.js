@@ -930,30 +930,8 @@ function mostrarArchivosTemporales() {
 
 async function procesarArchivosNuevaSolicitud() {
     const input = document.getElementById('archivosNuevaSolicitud');
-    const archivos = [];
-    
-    if (!input.files || input.files.length === 0) {
-        return archivos;
-    }
-    
-    for (let file of input.files) {
-        const reader = new FileReader();
-        const archivoPromise = new Promise((resolve) => {
-            reader.onload = function(e) {
-                resolve({
-                    nombre: file.name,
-                    tipo: file.type,
-                    datos: e.target.result,
-                    fecha: new Date().toISOString()
-                });
-            };
-            reader.readAsDataURL(file);
-        });
-        
-        archivos.push(await archivoPromise);
-    }
-    
-    return archivos;
+    if (!input.files || input.files.length === 0) return [];
+    return Array.from(input.files);
 }
 
 // Función auxiliar para establecer required de forma segura
@@ -1136,24 +1114,20 @@ function manejarArchivoPDF(id) {
     const status = document.getElementById(`statusPDF_${id}`);
     const btnSubir = document.getElementById(`btnSubirPDF_${id}`);
     const file = input.files[0];
-    
+
     if (!file) return;
-    
-    // Validar tamaño (máximo 5MB)
-    const maxSize = 5 * 1024 * 1024;
+
+    // Validar tamaño (máximo 10MB)
+    const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
-        alert('El archivo es demasiado grande. Tamaño máximo: 5 MB');
+        alert('El archivo es demasiado grande. Tamaño máximo: 10 MB');
         input.value = '';
         return;
     }
-    
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        archivosPDFGastos[id] = {
-            nombre: file.name,
-            tipo: file.type,
-            datos: e.target.result
-        };
+
+    // Guardar File object — se sube a Storage al guardar la solicitud
+    archivosPDFGastos[id] = file;
+    {
         
         // Actualizar botón
         if (btnSubir) {
@@ -1164,35 +1138,25 @@ function manejarArchivoPDF(id) {
         status.textContent = file.name;
         status.className = 'archivo-status cargado';
         status.style.display = 'block';
-        
-        // Resto del código de botones...
+
+        if (btnSubir) { btnSubir.style.background = '#28a745'; btnSubir.textContent = '✓ Listo'; }
+
         const botonesAnteriores = status.parentNode.querySelectorAll('.btn-accion-archivo');
         botonesAnteriores.forEach(btn => btn.remove());
-        
+
         const containerBotones = document.createElement('div');
-        containerBotones.style.display = 'flex';
-        containerBotones.style.gap = '4px';
-        containerBotones.style.marginTop = '4px';
-        
-        const btnVer = document.createElement('button');
-        btnVer.type = 'button';
-        btnVer.className = 'btn-accion-archivo';
-        btnVer.textContent = '👁';
-        btnVer.title = 'Ver archivo';
-        btnVer.onclick = () => verArchivoGasto(id, 'pdf');
-        
+        containerBotones.style.cssText = 'display:flex;gap:4px;margin-top:4px';
+
         const btnEliminar = document.createElement('button');
         btnEliminar.type = 'button';
         btnEliminar.className = 'btn-accion-archivo btn-eliminar';
         btnEliminar.textContent = '🗑';
         btnEliminar.title = 'Eliminar archivo';
         btnEliminar.onclick = () => eliminarArchivoPDFGasto(id);
-        
-        containerBotones.appendChild(btnVer);
+
         containerBotones.appendChild(btnEliminar);
         status.parentNode.appendChild(containerBotones);
-    };
-    reader.readAsDataURL(file);
+    }
 }
 
 // Manejar archivo XML
@@ -1200,78 +1164,57 @@ function manejarArchivoXML(id) {
     const input = document.getElementById(`archivoXML_${id}`);
     const status = document.getElementById(`statusXML_${id}`);
     const file = input.files[0];
-    
+
     if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        archivosXMLGastos[id] = {
-            nombre: file.name,
-            tipo: file.type,
-            datos: e.target.result
-        };
-        
-        status.textContent = file.name;
-        status.className = 'archivo-status cargado';
-        status.style.display = 'block';
-        
-        // Limpiar botones anteriores si existen
-        const botonesAnteriores = status.parentNode.querySelectorAll('.btn-accion-archivo');
-        botonesAnteriores.forEach(btn => btn.remove());
-        
-        // Contenedor de botones
-        const containerBotones = document.createElement('div');
-        containerBotones.style.display = 'flex';
-        containerBotones.style.gap = '4px';
-        containerBotones.style.marginTop = '4px';
-        
-        // Botón Descargar
-        const btnDescargar = document.createElement('button');
-        btnDescargar.type = 'button';
-        btnDescargar.className = 'btn-accion-archivo';
-        btnDescargar.textContent = '⬇';
-        btnDescargar.title = 'Descargar archivo';
-        btnDescargar.onclick = () => descargarArchivoGasto(id, 'xml');
-        
-        // Botón Eliminar
-        const btnEliminar = document.createElement('button');
-        btnEliminar.type = 'button';
-        btnEliminar.className = 'btn-accion-archivo btn-eliminar';
-        btnEliminar.textContent = '🗑';
-        btnEliminar.title = 'Eliminar archivo';
-        btnEliminar.onclick = () => eliminarArchivoXMLGasto(id);
-        
-        containerBotones.appendChild(btnDescargar);
-        containerBotones.appendChild(btnEliminar);
-        status.parentNode.appendChild(containerBotones);
-    };
-    reader.readAsDataURL(file);
+
+    // Guardar File object — se sube a Storage al guardar la solicitud
+    archivosXMLGastos[id] = file;
+
+    status.textContent = file.name;
+    status.className = 'archivo-status cargado';
+    status.style.display = 'block';
+
+    const botonesAnteriores = status.parentNode.querySelectorAll('.btn-accion-archivo');
+    botonesAnteriores.forEach(btn => btn.remove());
+
+    const containerBotones = document.createElement('div');
+    containerBotones.style.cssText = 'display:flex;gap:4px;margin-top:4px';
+
+    const btnEliminar = document.createElement('button');
+    btnEliminar.type = 'button';
+    btnEliminar.className = 'btn-accion-archivo btn-eliminar';
+    btnEliminar.textContent = '🗑';
+    btnEliminar.title = 'Eliminar archivo';
+    btnEliminar.onclick = () => eliminarArchivoXMLGasto(id);
+
+    containerBotones.appendChild(btnEliminar);
+    status.parentNode.appendChild(containerBotones);
 }
 
 // Ver archivo de gasto
-function verArchivoGasto(id, tipo) {
+async function verArchivoGasto(id, tipo) {
     const archivo = tipo === 'pdf' ? archivosPDFGastos[id] : archivosXMLGastos[id];
     if (!archivo) return;
-    
+
+    let url;
+    if (archivo instanceof File) {
+        url = URL.createObjectURL(archivo);
+    } else if (archivo.path) {
+        try {
+            const blob = await window.descargarBlobArchivoSolicitud(archivo.path);
+            url = URL.createObjectURL(blob);
+        } catch(e) { alert('Error al obtener el archivo'); return; }
+    } else if (archivo.datos) {
+        url = archivo.datos;
+    } else { return; }
+
     const ventana = window.open('', '_blank');
-    if (archivo.tipo === 'application/pdf') {
-        ventana.document.write(`
-            <html>
-            <head><title>${archivo.nombre}</title></head>
-            <body style="margin:0;">
-                <iframe src="${archivo.datos}" style="width:100%;height:100vh;border:none;"></iframe>
-            </body>
-            </html>
-        `);
+    const nombre = archivo instanceof File ? archivo.name : archivo.nombre;
+    const tipoArchivo = archivo instanceof File ? archivo.type : archivo.tipo;
+    if (tipoArchivo === 'application/pdf') {
+        ventana.document.write(`<html><head><title>${nombre}</title></head><body style="margin:0;"><iframe src="${url}" style="width:100%;height:100vh;border:none;"></iframe></body></html>`);
     } else {
-        ventana.document.write(`
-            <html>
-            <head><title>${archivo.nombre}</title></head>
-            <body style="margin:0;display:flex;justify-content:center;align-items:center;background:#000;">
-                <img src="${archivo.datos}" style="max-width:100%;max-height:100vh;">
-            </body>
-            </html>
-        `);
+        ventana.document.write(`<html><head><title>${nombre}</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;background:#000;"><img src="${url}" style="max-width:100%;max-height:100vh;"></body></html>`);
     }
 }
 
@@ -1327,13 +1270,28 @@ function eliminarArchivoXMLGasto(id) {
 }
 
 // Descargar archivo de gasto
-function descargarArchivoGasto(id, tipo) {
+async function descargarArchivoGasto(id, tipo) {
     const archivo = tipo === 'xml' ? archivosXMLGastos[id] : archivosPDFGastos[id];
     if (!archivo) return;
-    
+
+    let url, nombre;
+    if (archivo instanceof File) {
+        url = URL.createObjectURL(archivo);
+        nombre = archivo.name;
+    } else if (archivo.path) {
+        try {
+            const blob = await window.descargarBlobArchivoSolicitud(archivo.path);
+            url = URL.createObjectURL(blob);
+        } catch(e) { alert('Error al descargar el archivo'); return; }
+        nombre = archivo.nombre;
+    } else if (archivo.datos) {
+        url = archivo.datos;
+        nombre = archivo.nombre;
+    } else { return; }
+
     const link = document.createElement('a');
-    link.href = archivo.datos;
-    link.download = archivo.nombre;
+    link.href = url;
+    link.download = nombre;
     link.click();
 }
 
@@ -2029,10 +1987,52 @@ async function crearSolicitud(event) {
         }
         
         try {
-            const solicitudGuardada = await guardarSolicitudSupabase(solicitud);
+            // Guardar solicitud con archivos vacíos; se suben después de tener el ID real
+            const solicitudParaGuardar = { ...solicitud, archivos: [] };
+            if (solicitudParaGuardar.gastosCajaChica) {
+                solicitudParaGuardar.gastosCajaChica = solicitudParaGuardar.gastosCajaChica.map(g => ({
+                    ...g, archivoPDF: null, archivoXML: null
+                }));
+            }
+            const solicitudGuardada = await guardarSolicitudSupabase(solicitudParaGuardar);
+            const realId = solicitudGuardada.id;
+
+            // Subir archivos adjuntos generales
+            const archivosSubidos = [];
+            for (const file of archivosAdjuntos) {
+                try {
+                    const meta = await window.subirArchivoSolicitud(file, realId);
+                    archivosSubidos.push(meta);
+                } catch(e) { console.error('Error subiendo archivo adjunto:', e); }
+            }
+
+            // Subir archivos de gastos (caja chica)
+            let gastosConArchivos = solicitud.gastosCajaChica;
+            if (gastosConArchivos) {
+                gastosConArchivos = await Promise.all(gastosConArchivos.map(async (g, idx) => {
+                    const gasto = { ...g };
+                    if (g.archivoPDF?.name) {
+                        try { gasto.archivoPDF = await window.subirArchivoSolicitud(g.archivoPDF, realId, `gastos/${idx}`); }
+                        catch(e) { console.error('Error subiendo PDF gasto:', e); gasto.archivoPDF = null; }
+                    } else { gasto.archivoPDF = null; }
+                    if (g.archivoXML?.name) {
+                        try { gasto.archivoXML = await window.subirArchivoSolicitud(g.archivoXML, realId, `gastos/${idx}`); }
+                        catch(e) { console.error('Error subiendo XML gasto:', e); gasto.archivoXML = null; }
+                    } else { gasto.archivoXML = null; }
+                    return gasto;
+                }));
+            }
+
+            // Actualizar solicitud con metadatos de archivos si hubo archivos
+            if (archivosSubidos.length > 0 || (gastosConArchivos && gastosConArchivos !== solicitud.gastosCajaChica)) {
+                const actualizar = { ...solicitudGuardada, archivos: archivosSubidos };
+                if (gastosConArchivos) actualizar.gastosCajaChica = gastosConArchivos;
+                await actualizarSolicitudSupabase(actualizar);
+            }
+
             solicitudes.push(solicitudGuardada);
             contadores[sucursal] = numeroConsecutivo;
-            
+
             // Recargar solicitudes después de crear
             await cargarSolicitudesSupabase();
             
@@ -3842,36 +3842,62 @@ async function descargarArchivosZip(solicitudId) {
         // Si es solicitud de caja chica, incluir archivos de gastos
         if (solicitud.tipoFormato === 'cajaChica' && solicitud.gastosCajaChica) {
             const gastosAutorizados = solicitud.gastosCajaChica.filter(g => g.autorizado);
-            
-            gastosAutorizados.forEach((gasto, index) => {
-                const numeroGasto = index + 1;
-                const prefijo = `Gasto_${numeroGasto}_${gasto.factura}`;
-                
-                // Agregar PDF/Imagen
+
+            for (const [index, gasto] of gastosAutorizados.entries()) {
+                const prefijo = `Gasto_${index + 1}_${gasto.factura}`;
+
                 if (gasto.archivoPDF) {
-                    const base64Data = gasto.archivoPDF.datos.split(',')[1];
-                    const extension = obtenerExtensionDeArchivo(gasto.archivoPDF.nombre);
-                    zip.file(`${prefijo}.${extension}`, base64Data, {base64: true});
-                    totalArchivos++;
+                    try {
+                        let blob;
+                        if (gasto.archivoPDF.path) {
+                            blob = await window.descargarBlobArchivoSolicitud(gasto.archivoPDF.path);
+                        } else if (gasto.archivoPDF.datos) {
+                            const b64 = gasto.archivoPDF.datos.split(',')[1];
+                            blob = await (await fetch(`data:application/octet-stream;base64,${b64}`)).blob();
+                        }
+                        if (blob) {
+                            const ext = obtenerExtensionDeArchivo(gasto.archivoPDF.nombre);
+                            zip.file(`${prefijo}.${ext}`, blob);
+                            totalArchivos++;
+                        }
+                    } catch(e) { console.warn('Error descargando PDF gasto:', e); }
                 }
-                
-                // Agregar XML
+
                 if (gasto.archivoXML) {
-                    const base64Data = gasto.archivoXML.datos.split(',')[1];
-                    zip.file(`${prefijo}.xml`, base64Data, {base64: true});
-                    totalArchivos++;
+                    try {
+                        let blob;
+                        if (gasto.archivoXML.path) {
+                            blob = await window.descargarBlobArchivoSolicitud(gasto.archivoXML.path);
+                        } else if (gasto.archivoXML.datos) {
+                            const b64 = gasto.archivoXML.datos.split(',')[1];
+                            blob = await (await fetch(`data:application/octet-stream;base64,${b64}`)).blob();
+                        }
+                        if (blob) {
+                            zip.file(`${prefijo}.xml`, blob);
+                            totalArchivos++;
+                        }
+                    } catch(e) { console.warn('Error descargando XML gasto:', e); }
                 }
-            });
+            }
         }
-        
+
         // Agregar archivos adjuntos generales de la solicitud
         if (solicitud.archivos && solicitud.archivos.length > 0) {
-            solicitud.archivos.forEach((archivo, index) => {
-                const base64Data = archivo.datos.split(',')[1];
-                const nombreArchivo = archivo.nombre || `archivo_${index + 1}`;
-                zip.file(`Adjuntos/${nombreArchivo}`, base64Data, {base64: true});
-                totalArchivos++;
-            });
+            for (const [index, archivo] of solicitud.archivos.entries()) {
+                try {
+                    let blob;
+                    if (archivo.path) {
+                        blob = await window.descargarBlobArchivoSolicitud(archivo.path);
+                    } else if (archivo.datos) {
+                        const b64 = archivo.datos.split(',')[1];
+                        blob = await (await fetch(`data:application/octet-stream;base64,${b64}`)).blob();
+                    }
+                    if (blob) {
+                        zip.file(`Adjuntos/${archivo.nombre || `archivo_${index + 1}`}`, blob);
+                        totalArchivos++;
+                    }
+                } catch(e) { console.warn('Error descargando adjunto:', e); }
+            }
         }
         
         if (totalArchivos === 0) {
@@ -3926,30 +3952,16 @@ async function subirArchivos() {
     try {
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            
+
             // Validar tamaño (máximo 10MB)
             const maxSize = 10 * 1024 * 1024;
             if (file.size > maxSize) {
                 alert(`El archivo "${file.name}" es demasiado grande. Tamaño máximo: 10 MB`);
                 continue;
             }
-            
-            // Leer archivo
-            const reader = new FileReader();
-            const archivoPromise = new Promise((resolve) => {
-                reader.onload = function(e) {
-                    resolve({
-                        nombre: file.name,
-                        tipo: file.type,
-                        datos: e.target.result,
-                        fecha: new Date().toISOString()
-                    });
-                };
-                reader.readAsDataURL(file);
-            });
-            
-            const archivo = await archivoPromise;
-            solicitud.archivos.push(archivo);
+
+            const meta = await window.subirArchivoSolicitud(file, solicitudActualArchivos);
+            solicitud.archivos.push(meta);
         }
         
         // Guardar cambios
@@ -3978,13 +3990,24 @@ async function subirArchivos() {
     }
 }
 
-function descargarArchivo(solicitudId, archivoIndex) {
+async function descargarArchivo(solicitudId, archivoIndex) {
     const solicitud = solicitudes.find(s => s.id === solicitudId);
     if (!solicitud || !solicitud.archivos || !solicitud.archivos[archivoIndex]) return;
-    
+
     const archivo = solicitud.archivos[archivoIndex];
+    let url;
+
+    if (archivo.path) {
+        try {
+            const blob = await window.descargarBlobArchivoSolicitud(archivo.path);
+            url = URL.createObjectURL(blob);
+        } catch(e) { alert('Error al descargar el archivo'); return; }
+    } else if (archivo.datos) {
+        url = archivo.datos;
+    } else { return; }
+
     const link = document.createElement('a');
-    link.href = archivo.datos;
+    link.href = url;
     link.download = archivo.nombre;
     link.click();
 }
@@ -4000,8 +4023,13 @@ async function eliminarArchivo(solicitudId, archivoIndex) {
     mostrarCargando(true);
     
     try {
+        const archivo = solicitud.archivos[archivoIndex];
+        if (archivo.path) {
+            try { await window.eliminarArchivoSolicitudStorage(archivo.path); }
+            catch(e) { console.warn('No se pudo eliminar de Storage:', e); }
+        }
         solicitud.archivos.splice(archivoIndex, 1);
-        
+
         // Guardar cambios
         await actualizarSolicitudSupabase(solicitud);
         
@@ -5310,43 +5338,54 @@ async function descargarArchivosGastosZip(solicitudId) {
         alert('No hay archivos para descargar');
         return;
     }
-    
+
     const gastosAutorizados = solicitud.gastosCajaChica.filter(g => g.autorizado);
-    const archivosParaDescargar = [];
-    
-    gastosAutorizados.forEach((gasto, index) => {
-        if (gasto.archivoPDF) {
-            archivosParaDescargar.push({
-                nombre: `${index + 1}_${gasto.factura}_${gasto.archivoPDF.nombre}`,
-                datos: gasto.archivoPDF.datos
-            });
+    mostrarCargando(true);
+
+    try {
+        const zip = new JSZip();
+        let totalArchivos = 0;
+
+        for (const [index, gasto] of gastosAutorizados.entries()) {
+            const prefijo = `${index + 1}_${gasto.factura}`;
+
+            for (const [clave, carpeta] of [['archivoPDF', prefijo], ['archivoXML', prefijo]]) {
+                const a = gasto[clave];
+                if (!a) continue;
+                try {
+                    let blob;
+                    if (a.path) {
+                        blob = await window.descargarBlobArchivoSolicitud(a.path);
+                    } else if (a.datos) {
+                        const b64 = a.datos.split(',')[1];
+                        blob = await (await fetch(`data:application/octet-stream;base64,${b64}`)).blob();
+                    }
+                    if (blob) {
+                        zip.file(`${carpeta}_${a.nombre}`, blob);
+                        totalArchivos++;
+                    }
+                } catch(e) { console.warn('Error descargando archivo gasto:', e); }
+            }
         }
-        if (gasto.archivoXML) {
-            archivosParaDescargar.push({
-                nombre: `${index + 1}_${gasto.factura}_${gasto.archivoXML.nombre}`,
-                datos: gasto.archivoXML.datos
-            });
+
+        if (totalArchivos === 0) {
+            mostrarCargando(false);
+            alert('No hay archivos adjuntos en los gastos autorizados');
+            return;
         }
-    });
-    
-    if (archivosParaDescargar.length === 0) {
-        alert('No hay archivos adjuntos en los gastos autorizados');
-        return;
-    }
-    
-    // Nota: La funcionalidad de ZIP requiere una librería externa
-    // Por ahora, descargar archivos individualmente
-    if (confirm(`Se descargarán ${archivosParaDescargar.length} archivos. ¿Desea continuar?`)) {
-        archivosParaDescargar.forEach((archivo, index) => {
-            setTimeout(() => {
-                const link = document.createElement('a');
-                link.href = archivo.datos;
-                link.download = archivo.nombre;
-                link.click();
-            }, index * 500); // Retraso de 500ms entre descargas
-        });
-        
-        alert('Descargando archivos...');
+
+        const content = await zip.generateAsync({ type: 'blob' });
+        mostrarCargando(false);
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(content);
+        link.download = `${solicitud.numero}_gastos.zip`;
+        link.click();
+        alert(`ZIP generado con ${totalArchivos} archivo(s)`);
+
+    } catch(error) {
+        mostrarCargando(false);
+        console.error('Error al generar ZIP de gastos:', error);
+        alert('Error al generar el archivo ZIP');
     }
 }
 
