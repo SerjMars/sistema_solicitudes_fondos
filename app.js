@@ -243,9 +243,6 @@ let rolesConfig = {
     }    
 };
 
-console.log('✅ rolesConfig cargado correctamente:', rolesConfig);
-console.log('✅ Jefe requiere gerencia:', rolesConfig['jefe']?.requiereGerencia);
-
 var beneficiarios = [
     {
         id: 1,
@@ -316,8 +313,6 @@ function verificarVersionConfiguracion() {
     
     // Si la versión cambió, limpiar configuraciones antiguas
     if (versionGuardada !== APP_VERSION || rolesVersionGuardada !== ROLES_CONFIG_VERSION) {
-        console.log('🔄 Nueva versión detectada. Actualizando configuración...');
-        
         // Limpiar configuraciones que pueden haber cambiado
         localStorage.removeItem('rolesConfig');
         
@@ -330,7 +325,6 @@ function verificarVersionConfiguracion() {
             alert(`Sistema actualizado a versión ${APP_VERSION}\n\nSe han aplicado mejoras y correcciones.`);
         }
 
-        console.log('✅ Configuración actualizada a versión', APP_VERSION);
     }
 }
 
@@ -1038,7 +1032,6 @@ function cambiarFormato(formato) {
 // Agregar fila de gasto con archivos
 function agregarFilaGasto() {
 
-    console.log(`Agregando fila de gasto. Contador actual: ${contadorFilasGastos} -> ${contadorFilasGastos + 1}`);
 
     const tbody = document.getElementById('bodyGastos');
     const fila = tbody.insertRow();
@@ -1319,7 +1312,6 @@ function eliminarFilaGasto(btn) {
     fila.remove();
     calcularTotalReembolso();
     
-    console.log(`✓ Fila de gasto ${id} eliminada. Filas restantes: ${tbody.querySelectorAll('tr').length}`);
 }
 
 function limpiarFilaGasto(id) {
@@ -1576,22 +1568,13 @@ function seleccionarProveedor(id, nombreProveedor) {
 async function crearSolicitud(event) {
     event.preventDefault();
     
-    console.log('=== CREAR/ACTUALIZAR SOLICITUD ===');
-    
     const form = document.getElementById('solicitudForm');
     const editingId = form.getAttribute('data-editing-id');
     const isEditing = editingId !== null && editingId !== '';
-    
-    console.log('Modo edición:', isEditing);
-    console.log('ID editando:', editingId);
-    
+
     const tipoFormato = document.getElementById('tipoFormato').value;
     const empresaId = document.getElementById('empresa').value;
     const sucursal = document.getElementById('sucursal').value;
-    
-    console.log('Tipo formato:', tipoFormato);
-    console.log('Empresa ID:', empresaId);
-    console.log('Sucursal:', sucursal);
     
     // Si NO estamos editando, validar empresa
     if (!isEditing && !empresaId) {
@@ -1633,8 +1616,6 @@ async function crearSolicitud(event) {
     
     if (isEditing) {
         // ===== MODO EDICIÓN =====
-        console.log('Entrando a modo edición');
-        
         const solicitud = solicitudes.find(s => s.id == editingId);
         
         if (!solicitud) {
@@ -1649,13 +1630,8 @@ async function crearSolicitud(event) {
             return;
         }
         
-        console.log('Solicitud encontrada:', solicitud.numero);
-        console.log('Tipo de formato:', solicitud.tipoFormato);
-        
         try {
             if (solicitud.tipoFormato === 'cajaChica') {
-                // ===== ACTUALIZAR SOLICITUD DE CAJA CHICA =====
-                console.log('Actualizando solicitud de caja chica');
                 
                 const beneficiarioCajaChicaId = document.getElementById('beneficiarioCajaChica').value;
                 
@@ -1664,18 +1640,12 @@ async function crearSolicitud(event) {
                     return;
                 }
                 
-                if (!validarGastosCajaChica()) {
-                    console.log('Validación de gastos falló');
-                    return;
-                }
+                if (!validarGastosCajaChica()) return;
                 
                 const gastos = obtenerDatosGastos();
                 const totalReembolsar = gastos
                     .filter(g => g.autorizado)
                     .reduce((sum, g) => sum + g.monto, 0);
-                
-                console.log('Gastos obtenidos:', gastos.length);
-                console.log('Total a reembolsar:', totalReembolsar);
                 
                 // Actualizar campos
                 solicitud.empresaId = parseInt(empresaId);
@@ -1716,9 +1686,6 @@ async function crearSolicitud(event) {
                     return gasto;
                 }));
 
-                console.log('Datos actualizados, guardando en Supabase...');
-
-                // Guardar en Supabase
                 await actualizarSolicitudSupabase(solicitud);
                 
                 // En lugar de recargar todo, solo actualizar el array local
@@ -1727,14 +1694,7 @@ async function crearSolicitud(event) {
                     solicitudes[index] = { ...solicitud };
                 }
 
-                // NO recargar desde Supabase inmediatamente
-                // await cargarDatosDesdeSupabase();
-                
-                console.log('✓ Solicitud de caja chica actualizada');
-                
             } else {
-                // ===== ACTUALIZAR SOLICITUD NORMAL =====
-                console.log('Actualizando solicitud normal');
                 
                 const beneficiarioId = document.getElementById('beneficiario').value;
                 const porcentajeImpuestos = parseFloat(document.getElementById('impuestos').value) || 0;
@@ -1770,13 +1730,8 @@ async function crearSolicitud(event) {
                 }
 
                 await actualizarSolicitudSupabase(solicitud);
-                // Actualizar array local
                 const index = solicitudes.findIndex(s => s.id === solicitud.id);
-                if (index !== -1) {
-                    solicitudes[index] = { ...solicitud };
-                }
-
-                console.log('✓ Solicitud normal actualizada');
+                if (index !== -1) solicitudes[index] = { ...solicitud };
             }
             
             alert('Solicitud actualizada exitosamente: ' + solicitud.numero);
@@ -1842,13 +1797,6 @@ async function crearSolicitud(event) {
             empresaObj.razonSocial.toUpperCase().includes('DESPACHO S/C') ||
             empresaObj.rfc.toUpperCase().includes('DESPACHO')
         );
-
-        // ✅ DEBUG
-        console.log('📋 CREANDO SOLICITUD');
-        console.log('Empresa ID:', empresaId);
-        console.log('Empresa objeto:', empresaObj);
-        console.log('Razón Social:', empresaObj?.razonSocial);
-        console.log('¿Es DESPACHO?:', esDespacho);
 
         // Determinar si requiere autorización de Jefe (si fue creado por Auxiliar)
         const requiereJefe = usuarioActual.rol === 'auxiliar';
@@ -2171,18 +2119,6 @@ function limpiarFormulario() {
         agregarFilaGasto();
     }
     
-    console.log('✓ Formulario limpiado completamente');
-    console.log('  - Contador gastos reseteado a:', contadorFilasGastos);
-    console.log('  - Archivos PDF limpiados');
-    console.log('  - Archivos XML limpiados');
-
-    console.log('=== FORMULARIO LIMPIO ===');
-    console.log('Contador:', contadorFilasGastos);
-    console.log('Archivos PDF:', Object.keys(archivosPDFGastos).length);
-    console.log('Archivos XML:', Object.keys(archivosXMLGastos).length);
-    console.log('Filas en tabla:', document.querySelectorAll('#bodyGastos tr').length);
-    console.log('========================');
-
     // Restaurar estado habilitado/deshabilitado del campo sucursal según el rol actual
     configurarInterfazPorRol();
 }
@@ -2537,31 +2473,19 @@ function exportarSolicitudesCSV() {
 }
 
 function editarSolicitud(id) {
-    console.log('=== EDITANDO SOLICITUD ===');
-    console.log('ID recibido:', id);
-    
     const solicitud = solicitudes.find(s => s.id === id);
-    console.log('Solicitud encontrada:', solicitud);
-    
+
     if (!solicitud || (solicitud.estado !== 'nueva' && !solicitud.estado.startsWith('pendiente_'))) {
         alert('Solo se pueden editar solicitudes que aún no han sido pagadas o canceladas');
-        console.log('Estado de solicitud:', solicitud?.estado);
         return;
     }
-    
-    console.log('Cambiando a pestaña nueva...');
-    // Cambiar a la pestaña de nueva solicitud
+
     switchTab('nueva');
-    
-    // Determinar el tipo de formato
+
     const esCajaChica = solicitud.tipoFormato === 'cajaChica';
-    console.log('¿Es caja chica?:', esCajaChica);
-    
+
     if (esCajaChica) {
-        // ===== EDITAR SOLICITUD DE CAJA CHICA =====
-        console.log('Cargando modo edición CAJA CHICA...');
         
-        // Cambiar al formato de caja chica
         cambiarFormato('cajaChica');
         
         // **USAR requestAnimationFrame para asegurar que el DOM esté listo**
@@ -2572,9 +2496,6 @@ function editarSolicitud(id) {
         });
         
     } else {
-        // ===== EDITAR SOLICITUD NORMAL =====
-        console.log('Cargando modo edición NORMAL...');
-        
         // Cambiar al formato normal
         cambiarFormato('normal');
         
@@ -2588,8 +2509,6 @@ function editarSolicitud(id) {
 }
 
 function cargarDatosNormalEdicion(solicitud, solicitudId) {
-    console.log('→ Asignando valores a campos NORMAL...');
-    
     try {
         // Cargar datos básicos
         document.getElementById('empresa').value = solicitud.empresaId;
@@ -2620,9 +2539,6 @@ function cargarDatosNormalEdicion(solicitud, solicitudId) {
         // Calcular total
         calcularTotal();
         
-        console.log('✓ Valores asignados correctamente');
-        
-        // Marcar modo edición AL FINAL
         finalizarConfiguracionEdicion(solicitudId, solicitud);
         
     } catch (error) {
@@ -2631,22 +2547,15 @@ function cargarDatosNormalEdicion(solicitud, solicitudId) {
     }
 }
 
-// Nueva función para cargar datos de solicitud CAJA CHICA en modo edición
 function cargarDatosCajaChicaEdicion(solicitud, solicitudId) {
-    console.log('Asignando valores a campos CAJA CHICA...');
-    
-    // Verificar que los elementos existan
     const empresa = document.getElementById('empresa');
     const sucursal = document.getElementById('sucursal');
     const beneficiarioCajaChica = document.getElementById('beneficiarioCajaChica');
-    
+
     if (!empresa || !sucursal || !beneficiarioCajaChica) {
-        console.error('Elementos no encontrados. Reintentando...');
         setTimeout(() => cargarDatosCajaChicaEdicion(solicitud, solicitudId), 100);
         return;
     }
-    
-    console.log('Elementos encontrados. Procediendo...');
     
     // Cargar datos básicos
     empresa.value = solicitud.empresaId;
@@ -2813,57 +2722,23 @@ function cargarDatosCajaChicaEdicion(solicitud, solicitudId) {
     finalizarConfiguracionEdicion(solicitudId, solicitud);
 }
 
-// Función helper para finalizar la configuración del modo edición
 function finalizarConfiguracionEdicion(id, solicitud) {
-    // Marcar que estamos editando (guardar el ID)
     const form = document.getElementById('solicitudForm');
     form.setAttribute('data-editing-id', id);
-    console.log('Atributo data-editing-id establecido:', form.getAttribute('data-editing-id'));
-    
-    // Cambiar el texto del botón
+
     const submitButton = document.querySelector('#solicitudForm button[type="submit"]');
     submitButton.textContent = 'Actualizar Solicitud';
     submitButton.style.background = '#ffc107';
 
-    // Mostrar botón cancelar
     const btnCancelar = document.getElementById('btnCancelarEdicion');
-    if (btnCancelar) {
-        btnCancelar.style.display = 'inline-block';
-    }
+    if (btnCancelar) btnCancelar.style.display = 'inline-block';
 
-    console.log('=== MODO EDICIÓN ACTIVADO ===');
-    alert('Editando solicitud ' + solicitud.numero + '. Modifique los campos necesarios y presione "Actualizar Solicitud"');
-}
-
-// Nueva función helper para finalizar la configuración del modo edición
-function finalizarConfiguracionEdicion(id, solicitud) {
-    // Marcar que estamos editando (guardar el ID)
-    const form = document.getElementById('solicitudForm');
-    form.setAttribute('data-editing-id', id);
-    console.log('Atributo data-editing-id establecido:', form.getAttribute('data-editing-id'));
-    
-    // Cambiar el texto del botón
-    const submitButton = document.querySelector('#solicitudForm button[type="submit"]');
-    submitButton.textContent = 'Actualizar Solicitud';
-    submitButton.style.background = '#ffc107';
-
-    // Mostrar botón cancelar
-    const btnCancelar = document.getElementById('btnCancelarEdicion');
-    if (btnCancelar) {
-        btnCancelar.style.display = 'inline-block';
-    }
-
-    console.log('=== MODO EDICIÓN ACTIVADO ===');
     alert('Editando solicitud ' + solicitud.numero + '. Modifique los campos necesarios y presione "Actualizar Solicitud"');
 }
 
 function cancelarEdicion() {
-    if (!confirm('¿Está seguro de cancelar la edición? Los cambios no guardados se perderán.')) {
-        return;
-    }
-    
-    console.log('Cancelando edición...');
-    
+    if (!confirm('¿Está seguro de cancelar la edición? Los cambios no guardados se perderán.')) return;
+
     const form = document.getElementById('solicitudForm');
     form.removeAttribute('data-editing-id');
     
@@ -2880,11 +2755,7 @@ function cancelarEdicion() {
     
     // Limpiar formulario
     limpiarFormulario();
-    
-    // Volver a la pestaña de solicitudes
     switchTab('solicitudes');
-    
-    console.log('✓ Edición cancelada');
 }
 
 // SECCIÓN 2 - Visualización y PDF Mejorado
@@ -2893,15 +2764,6 @@ function verDetalle(id) {
     const solicitud = solicitudes.find(s => s.id === id);
     if (!solicitud) return;
     
-    // ===== DEBUGGING TEMPORAL =====
-    console.log('=== VER DETALLE DE SOLICITUD ===');
-    console.log('ID:', solicitud.id);
-    console.log('Número:', solicitud.numero);
-    console.log('Tipo:', solicitud.tipoFormato);
-    console.log('Gastos Caja Chica:', solicitud.gastosCajaChica);
-    console.log('================================');
-    // ==============================
-
     const modal = document.getElementById('detalleModal');
     const content = document.getElementById('modalContent');
     const title = document.getElementById('modalTitle');
@@ -2932,14 +2794,6 @@ const tituloSolicitud = solicitud.tipoFormato === 'cajaChica'
     ? 'SOLICITUD DE REEMBOLSO DE GASTOS DE CAJA CHICA' 
     : 'SOLICITUD DE FONDOS';
 
-// ===== VERIFICACIÓN CRÍTICA =====
-// console.log('=== VERIFICANDO TIPO DE FORMATO ===');
-// console.log('ID Solicitud:', solicitud.id);
-// console.log('Tipo formato:', solicitud.tipoFormato);
-// console.log('¿Es caja chica?:', solicitud.tipoFormato === 'cajaChica');
-// console.log('Gastos disponibles:', solicitud.gastosCajaChica);
-// console.log('================================');
-
 // Generar contenido según el tipo de formato
 let htmlTablaContenido = '';
 let htmlSeccionConcepto = '';
@@ -2955,10 +2809,6 @@ if (solicitud.tipoFormato === 'cajaChica') {
     // Filtrar SOLO los gastos autorizados de ESTA solicitud
     const gastosAutorizados = solicitud.gastosCajaChica.filter(g => g.autorizado === true);
     const totalAutorizado = gastosAutorizados.reduce((sum, g) => sum + (g.monto || 0), 0);
-    
-    console.log('Gastos de esta solicitud:', solicitud.gastosCajaChica);
-    console.log('Gastos autorizados:', gastosAutorizados);
-    console.log('Total autorizado:', totalAutorizado);
     
     htmlTablaContenido = `
         <div style="margin: 8px 0; padding: 6px; background: #f8f9fa; border: 1px solid #9c27b0;">
@@ -4175,20 +4025,11 @@ function mostrarFormularioUsuario(username = null) {
 }
 
 function toggleSucursalField() {
-    console.log('🔍 toggleSucursalField llamada');
-    
     const rol = document.getElementById('usuarioRol').value;
-    console.log('Rol seleccionado:', rol);
-    
     const rolConfig = rolesConfig[rol];
-    console.log('Configuración del rol:', rolConfig);
-    console.log('requiereGerencia:', rolConfig?.requiereGerencia);
-    
-    // Campo Sucursal
+
     const sucursalGroup = document.getElementById('usuarioSucursalGroup');
     const sucursalSelect = document.getElementById('usuarioSucursal');
-    
-    console.log('sucursalGroup:', sucursalGroup);
     
     if (rolConfig && rolConfig.requiereSucursal) {
         sucursalGroup.style.display = 'block';
@@ -4199,19 +4040,13 @@ function toggleSucursalField() {
         sucursalSelect.value = '';
     }
     
-    // ✅ Campo Gerencia
     const gerenciaGroup = document.getElementById('usuarioGerenciaGroup');
     const gerenciaSelect = document.getElementById('usuarioGerencia');
-    
-    console.log('🔍 gerenciaGroup encontrado:', gerenciaGroup);
-    console.log('🔍 gerenciaSelect encontrado:', gerenciaSelect);
-    
+
     if (rolConfig && rolConfig.requiereGerencia) {
-        console.log('✅ Mostrando campo de gerencia');
         gerenciaGroup.style.display = 'block';
         gerenciaSelect.required = true;
     } else {
-        console.log('❌ Ocultando campo de gerencia');
         gerenciaGroup.style.display = 'none';
         gerenciaSelect.required = false;
         gerenciaSelect.value = '';
@@ -5329,9 +5164,7 @@ function guardarDatosLocalStorage() {
         localStorage.setItem('contadores', JSON.stringify(contadores));
         localStorage.setItem('beneficiarios', JSON.stringify(beneficiarios));
         localStorage.setItem('empresas', JSON.stringify(empresas));
-        //console.log('Datos guardados en localStorage correctamente');
     } catch (e) {
-        //console.error('Error al guardar en localStorage:', e);
     }
 }
 
@@ -5463,19 +5296,6 @@ function mostrarFlujoAutorizacion(solicitudId) {
     
     if (!solicitud) return;
     
-// ✅ DEBUG: Ver información de la empresa
-    //const empresa = empresas.find(e => e.id === solicitud.empresaId);
-    console.log('========================================');
-    console.log('DEBUG FLUJO DE AUTORIZACIÓN');
-    console.log('========================================');
-    console.log('Solicitud:', solicitud.numero);
-    console.log('Empresa ID:', solicitud.empresaId);
-    console.log('Empresa objeto:', empresa);
-    console.log('Razón Social:', empresa?.razonSocial);
-    console.log('Es Despacho?:', esEmpresaDespacho(solicitud.empresaId));
-    console.log('Flujo Contabilidad:', solicitud.flujoAutorizacion?.contabilidad);
-    console.log('========================================');
-
     const modal = document.getElementById('flujoAutorizacionModal');
     const info = document.getElementById('flujoSolicitudInfo');
     const timeline = document.getElementById('flujoTimeline');
@@ -5520,10 +5340,6 @@ function mostrarFlujoAutorizacion(solicitudId) {
         empresaObj.razonSocial.toUpperCase().includes('DESPACHO S/C')
     );
 
-    console.log('🔍 Empresa:', empresaObj?.razonSocial);
-    console.log('🔍 Es Despacho:', esDespacho);
-    console.log('🔍 Flujo Contabilidad requerido:', flujoAuth?.contabilidad?.requerido);
-    
     // Generar timeline
     let timelineHTML = '<div class="timeline">';
     
@@ -6019,7 +5835,6 @@ async function migrarSolicitudesAntiguasAlNuevoFlujo() {
         // Si ya tiene flujo, no hacer nada
         if (solicitud.flujoAutorizacion) continue;
         
-        console.log(`Migrando solicitud ${solicitud.numero}...`);
         
         // Determinar gerencia
         const gerenciaTipo = ['AGS', 'LEO', 'CAN', 'MTY', 'GDL', 'VSA', 'COS'].includes(solicitud.sucursal) ? 'GCS' : 'GCC';
@@ -6080,8 +5895,6 @@ async function migrarSolicitudesAntiguasAlNuevoFlujo() {
     }
     
     if (solicitudesMigradas > 0) {
-        console.log(`✓ ${solicitudesMigradas} solicitudes migradas al nuevo sistema`);
-        
         // Guardar todas las solicitudes migradas
         mostrarCargando(true);
         for (let solicitud of solicitudes) {
